@@ -49,11 +49,14 @@
     let rest = null, audio = null, wake = null;
     const restBar = document.createElement("div");
     restBar.className = "restbar"; restBar.hidden = true; restBar.setAttribute("role", "timer");
-    restBar.innerHTML = `<span>Rest <strong class="num" id="rest-left">0:00</strong></span><span class="row" style="gap:6px"><button type="button" data-rest="-15">−15</button><button type="button" data-rest="15">+15</button><button type="button" data-rest="skip">Skip</button></span>`;
+    restBar.innerHTML = `<div class="rt-top"><span class="rt-label">Rest</span><strong id="rest-left">0:00</strong></div>
+      <div class="rt-track"><b id="rest-prog" style="width:100%"></b></div>
+      <div class="rt-btns"><button type="button" data-rest="-15">−15s</button><button type="button" data-rest="15">+15s</button><button type="button" data-rest="skip">Skip</button></div>`;
     document.body.appendChild(restBar);
     restBar.addEventListener("click", (e) => {
       const b = e.target.closest("[data-rest]"); if (!b || !rest) return;
-      if (b.dataset.rest === "skip") rest = null; else rest.end += Number(b.dataset.rest) * 1000;
+      if (b.dataset.rest === "skip") rest = null;
+      else { rest.end += Number(b.dataset.rest) * 1000; rest.total = Math.max(rest.total, (rest.end - Date.now()) / 1000); }
       tick();
     });
     function beep() {
@@ -67,14 +70,18 @@
     function startRest(sec) {
       if (!(sec > 0)) return;
       try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
-      rest = { end: Date.now() + sec * 1000 };
+      rest = { end: Date.now() + sec * 1000, total: sec };
       tick();
     }
     function tick() {
       if (rest) {
         const left = Math.round((rest.end - Date.now()) / 1000);
         if (left <= 0) { rest = null; beep(); if (navigator.vibrate) navigator.vibrate([200, 100, 200]); }
-        else { restBar.hidden = false; restBar.querySelector("#rest-left").textContent = secOut(left); }
+        else {
+          restBar.hidden = false;
+          restBar.querySelector("#rest-left").textContent = secOut(left);
+          restBar.querySelector("#rest-prog").style.width = Math.max(0, Math.min(100, (left / rest.total) * 100)) + "%";
+        }
       }
       if (!rest) restBar.hidden = true;
       const el = document.getElementById("wk-elapsed");
@@ -110,7 +117,10 @@
       const h = new Date().getHours();
       return h < 12 ? "Morning workout" : h < 17 ? "Afternoon workout" : "Evening workout";
     }
-    const exFromRoutine = (re) => ({ exId: re.exId, rest: re.rest ?? 90, range: re.range || [8, 12], note: "", sets: Array.from({ length: re.sets || 3 }, () => blankSet()) });
+    const exFromRoutine = (re) => ({ exId: re.exId, rest: re.rest ?? 90, range: re.range || [8, 12], note: "", sets: Array.from({ length: re.sets || 1 }, () => blankSet()) });
+    const restLabel = (sec) => (!sec ? "Off" : sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}min${sec % 60 ? " " + (sec % 60) + "s" : ""}`);
+    const CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+    const CLOCK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9.5 2.5h5"/></svg>`;
 
     function targetFor(ex) {
       const def = exDef(ex.exId);
@@ -141,25 +151,26 @@
           };
           const fields = t === "du" ? inp("sec", "numeric") : t === "cd" ? inp("km", "decimal") + inp("sec", "numeric") : inp("kg", "decimal") + inp("reps", "numeric");
           return `<tr class="${s.done ? "done" : ""}"><td><button type="button" class="stype st-${s.type}" data-stype="${i}:${j}" aria-label="Set ${label} options">${label}</button></td>
-            <td class="prev" data-prev="${i}:${j}">${p ? esc(fmtSet(p, t)) : "–"}${s.pr && s.pr.length ? ` <span class="prb">PR</span>` : ""}</td>${fields}
-            <td><button type="button" class="chk" data-done="${i}:${j}" aria-pressed="${s.done}" aria-label="Complete set ${j + 1}">✓</button></td></tr>`;
+            <td class="prev" data-prev="${i}:${j}">${p ? esc(fmtSet(p, t).replace(` ${wu()} × `, "×")) : "–"}${s.pr && s.pr.length ? ` <span class="prb">PR</span>` : ""}</td>${fields}
+            <td><button type="button" class="chk" data-done="${i}:${j}" aria-pressed="${s.done}" aria-label="Complete set ${j + 1}">${CHECK}</button></td></tr>`;
         }).join("");
         return `<section class="card ex-card">
-          <div class="row spread"><button type="button" class="exname" data-exinfo="${esc(ex.exId)}">${esc(def.name)}</button><button class="btn ghost small" type="button" data-exmenu="${i}" aria-label="Exercise options">•••</button></div>
+          <div class="row" style="flex-wrap:nowrap"><button type="button" class="exname" data-exinfo="${esc(ex.exId)}">${esc(def.name)}</button><button class="ex-menu" type="button" data-exmenu="${i}" aria-label="Exercise options">•••</button></div>
+          <input class="note" data-note="${i}" value="${esc(ex.note || "")}" placeholder="Add notes here…" aria-label="Note">
+          <button type="button" class="rest-btn" data-restset="${i}">${CLOCK}Rest timer: ${restLabel(ex.rest)}</button>
           ${tgt ? `<p class="hint">${tgt.up ? "↑ " : ""}${esc(lb() ? tgt.text.replace(/(\d+(?:\.\d+)?) kg/g, (_, k) => `${wOut(Number(k))} lb`) : tgt.text)}</p>` : ""}
-          <input class="note" data-note="${i}" value="${esc(ex.note || "")}" placeholder="Add a note" aria-label="Note">
-          <div style="overflow-x:auto"><table class="sets"><thead><tr><th>Set</th><th>Previous</th>${cols.map((c) => `<th>${c}</th>`).join("")}<th aria-label="Done"></th></tr></thead><tbody>${rows}</tbody></table></div>
-          <div class="row spread"><button class="btn ghost small" type="button" data-addset="${i}">+ Add set</button><span class="small muted">Rest ${ex.rest ? secOut(ex.rest) : "off"} · ${(ex.range || [8, 12]).join("–")} reps</span></div>
+          <table class="sets"><thead><tr><th style="width:36px">Set</th><th>Previous</th>${cols.map((c) => `<th style="width:22%">${c}</th>`).join("")}<th style="width:42px" aria-label="Done"></th></tr></thead><tbody>${rows}</tbody></table>
+          <button class="add-set" type="button" data-addset="${i}">+ Add Set</button>
         </section>`;
       }).join("");
       return `<div class="app" style="gap:14px">
-        <section class="card">
-          <div class="row spread"><input class="wk-name" id="wk-name" value="${esc(a.name)}" aria-label="Workout name"><button class="btn" type="button" id="wk-finish">Finish</button></div>
-          <div class="row small muted" style="gap:14px"><span>⏱ <strong class="num" id="wk-elapsed">${clock(Date.now() - a.start)}</strong></span><span>${done} sets</span><span>${fmtVol(vol)}</span></div>
+        <section class="card wk-head">
+          <div class="row" style="flex-wrap:nowrap"><input class="wk-name" id="wk-name" value="${esc(a.name)}" aria-label="Workout name"><button class="btn small" type="button" id="wk-finish">Finish</button></div>
+          <div class="wk-stats"><div><span>Duration</span><b id="wk-elapsed" style="color:var(--primary)">${clock(Date.now() - a.start)}</b></div><div><span>Volume</span><b>${fmtVol(vol)}</b></div><div><span>Sets</span><b>${done}</b></div></div>
         </section>
         ${cards || `<div class="card"><p class="empty" style="margin:0">Add your first exercise to start logging sets.</p></div>`}
         <button class="btn wide" type="button" id="wk-add">+ Add exercises</button>
-        <button class="link" type="button" id="wk-discard" style="justify-self:center;color:var(--protein)">Discard workout</button>
+        <button class="link" type="button" id="wk-discard" style="justify-self:center;color:var(--danger);padding:6px">Discard workout</button>
       </div>`;
     }
 
@@ -211,10 +222,17 @@
       }));
       v.querySelectorAll("[data-addset]").forEach((b) => (b.onclick = () => {
         const ex = S.active.exercises[Number(b.dataset.addset)], last = ex.sets[ex.sets.length - 1];
-        ex.sets.push(last ? { ...blankSet(last.type === "w" ? "n" : last.type), kg: last.kg, reps: null, sec: last.sec, km: null } : blankSet());
+        ex.sets.push(last ? { ...blankSet(last.type === "w" ? "n" : last.type), kg: last.kg, reps: last.reps, sec: last.sec, km: last.km } : blankSet());
         saveActive(true); app.render();
       }));
       v.querySelectorAll("[data-exmenu]").forEach((b) => (b.onclick = () => exerciseMenu(Number(b.dataset.exmenu))));
+      v.querySelectorAll("[data-restset]").forEach((b) => (b.onclick = () => {
+        const ex = S.active.exercises[Number(b.dataset.restset)];
+        sheet(head("Rest timer") + `<p class="small muted" style="margin:0">Starts when you tick a set of ${esc(exDef(ex.exId).name)}.</p>
+          <div class="chips">${[0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300].map((sec) => `<button type="button" data-sec="${sec}" aria-pressed="${sec === (ex.rest || 0)}">${restLabel(sec)}</button>`).join("")}</div>`, (el) => {
+          el.querySelectorAll("[data-sec]").forEach((c) => (c.onclick = () => { ex.rest = Number(c.dataset.sec); saveActive(true); app.closeSheet(); app.render(); }));
+        });
+      }));
       v.querySelectorAll("[data-exinfo]").forEach((b) => (b.onclick = () => openExercise(b.dataset.exinfo)));
       $("#wk-add").onclick = () => picker((ids) => { for (const id of ids) S.active.exercises.push(exFromRoutine({ exId: id })); saveActive(true); app.render(); });
       $("#wk-finish").onclick = finishPrompt;
@@ -393,7 +411,7 @@
       return `<div class="app" style="gap:14px">
         <section class="card">
           <div class="row spread"><h2>Train</h2><span class="small muted">${thisWeek} workout${thisWeek === 1 ? "" : "s"} this week</span></div>
-          <button class="btn wide" type="button" id="tr-empty">Start empty workout</button>
+          <button class="btn wide" type="button" id="tr-empty">+ Start Empty Workout</button>
         </section>
         <section class="card">
           <div class="row spread"><h2>Routines</h2><button class="btn ghost small" type="button" id="rt-new">New routine</button></div>
