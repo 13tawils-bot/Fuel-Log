@@ -71,18 +71,18 @@ scanning, Open Food Facts lookups from the barcode alone, works offline, and
 installs to the home screen. The log is saved on the phone (use Plan → Backup
 to move it); Claude features are hidden.
 
-- Every push to `gym-tracker/` runs `.github/workflows/pages.yml`, which tests,
-  builds with `site/build.mjs` and publishes to the `gh-pages` branch.
+- Every push to `main` runs `.github/workflows/pages.yml`, which tests, builds
+  with `scripts/build.mjs` and publishes to the `gh-pages` branch.
 - One-time setup: repo **Settings → Pages → Build and deployment → Deploy from a
   branch → `gh-pages` / `(root)`**. The app is then at
-  `https://13tawils-bot.github.io/interview-Prep/gym/`.
+  `https://13tawils-bot.github.io/fuel-log/`, with a demo full of example data at `/fuel-log/demo/`.
 - Install on iPhone: open that link in **Safari** → Share → **Add to Home Screen**.
   On Android: open it in **Chrome** → menu → **Install app**.
-- Build locally: `node site/build.mjs`, then serve `_site/` (camera access needs
+- Build locally: `node scripts/build.mjs`, then serve `_site/` (camera access needs
   `https://` or `localhost`).
 
 ```bash
-node --test gym-tracker/nutrition.test.js
+node --test nutrition.test.js workouts.test.js
 ```
 
 | File | Role |

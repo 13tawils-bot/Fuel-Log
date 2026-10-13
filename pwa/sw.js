@@ -17,6 +17,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.hostname.endsWith("openfoodfacts.org")) return; // always live; the app handles failures
+  if (url.pathname.includes("/demo/")) return; // the demo is a separate page
   // App shell and fonts: answer from cache at once, refresh it in the background.
   e.respondWith(caches.open(CACHE).then(async (cache) => {
     const key = req.mode === "navigate" ? "./" : req;
