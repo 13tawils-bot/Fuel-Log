@@ -46,50 +46,101 @@
     const head = (title) => `<div class="row spread"><h2>${title}</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>`;
 
     // ---------- Rest timer, elapsed clock, wake lock ----------
-    let rest = null, audio = null, wake = null;
+    // Works like a gym-app rest timer: ticking a set starts it as a slim bar
+    // above the tab bar; tap the bar for a full-screen countdown. The end time is
+    // stored, so it survives reloads and keeps counting while you're elsewhere.
+    let rest = null, audio = null, wake = null, expanded = false, endedWhileAway = null;
+    try { const r = JSON.parse(localStorage.getItem("fuel-log-rest") || "null"); if (r && r.end > Date.now()) rest = r; } catch (e) {}
+    const saveRest = () => { try { rest ? localStorage.setItem("fuel-log-rest", JSON.stringify(rest)) : localStorage.removeItem("fuel-log-rest"); } catch (e) {} };
+    const R = 104, CIRC = 2 * Math.PI * R;
     const restBar = document.createElement("div");
     restBar.className = "restbar"; restBar.hidden = true; restBar.setAttribute("role", "timer");
-    restBar.innerHTML = `<div class="rt-top"><span class="rt-label">Rest</span><strong id="rest-left">0:00</strong></div>
-      <div class="rt-track"><b id="rest-prog" style="width:100%"></b></div>
-      <div class="rt-btns"><button type="button" data-rest="-15">−15s</button><button type="button" data-rest="15">+15s</button><button type="button" data-rest="skip">Skip</button></div>`;
-    document.body.appendChild(restBar);
-    restBar.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-rest]"); if (!b || !rest) return;
-      if (b.dataset.rest === "skip") rest = null;
-      else { rest.end += Number(b.dataset.rest) * 1000; rest.total = Math.max(rest.total, (rest.end - Date.now()) / 1000); }
-      tick();
-    });
+    restBar.innerHTML = `<button type="button" class="rb-main" data-rest="open" aria-label="Open rest timer"><span class="rb-label">Rest</span><strong id="rest-left">0:00</strong></button>
+      <button type="button" data-rest="-15">−15</button><button type="button" data-rest="15">+15</button><button type="button" class="rb-skip" data-rest="skip">Skip</button>
+      <div class="rt-track"><b id="rest-prog" style="width:100%"></b></div>`;
+    const restFull = document.createElement("div");
+    restFull.className = "restfull"; restFull.hidden = true; restFull.setAttribute("role", "dialog"); restFull.setAttribute("aria-label", "Rest timer");
+    restFull.innerHTML = `<div class="rf-top"><button type="button" class="rf-min" data-rest="close" aria-label="Minimise timer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><span>Rest timer</span><span style="width:40px"></span></div>
+      <div class="rf-ring"><svg viewBox="0 0 240 240" aria-hidden="true"><circle cx="120" cy="120" r="${R}" class="rf-bg"/><circle cx="120" cy="120" r="${R}" class="rf-fg" id="rf-arc" stroke-dasharray="${CIRC}" stroke-dashoffset="0" transform="rotate(-90 120 120)"/></svg>
+        <div class="rf-mid"><strong id="rf-left">0:00</strong><span id="rf-total"></span></div></div>
+      <p class="rf-next" id="rf-next"></p>
+      <div class="rf-btns"><button type="button" data-rest="-15">−15s</button><button type="button" data-rest="15">+15s</button></div>
+      <button type="button" class="rf-skip" data-rest="skip">Skip rest</button>`;
+    const flashEl = document.createElement("div");
+    flashEl.className = "restflash"; flashEl.hidden = true; flashEl.setAttribute("role", "status");
+    document.body.append(restBar, restFull, flashEl);
+    const onRest = (e) => {
+      const b = e.target.closest("[data-rest]"); if (!b) return;
+      const a = b.dataset.rest;
+      if (a === "open") expanded = true;
+      else if (a === "close") expanded = false;
+      else if (!rest) return;
+      else if (a === "skip") { rest = null; expanded = false; }
+      else { rest.end += Number(a) * 1000; rest.total = Math.max(rest.total, (rest.end - Date.now()) / 1000); if (rest.end <= Date.now()) { rest = null; expanded = false; } }
+      saveRest(); tick();
+    };
+    restBar.addEventListener("click", onRest); restFull.addEventListener("click", onRest);
+    function unlockAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === "suspended") audio.resume(); } catch (e) {} }
     function beep() {
       try {
-        audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-        const o = audio.createOscillator(), g = audio.createGain();
-        o.frequency.value = 880; g.gain.value = 0.15; o.connect(g); g.connect(audio.destination);
-        o.start(); o.stop(audio.currentTime + 0.25);
+        unlockAudio();
+        // Three rising beeps, loud enough to hear across the gym floor.
+        [[0, 880], [0.28, 880], [0.56, 1320]].forEach(([at, f]) => {
+          const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + at;
+          o.type = "square"; o.frequency.value = f; o.connect(g); g.connect(audio.destination);
+          g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+          o.start(t); o.stop(t + 0.24);
+        });
       } catch (e) {}
     }
-    function startRest(sec) {
-      if (!(sec > 0)) return;
-      try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
-      rest = { end: Date.now() + sec * 1000, total: sec };
+    function restFlash(text) {
+      flashEl.innerHTML = `<strong>${esc(text)}</strong><span>Tap to dismiss</span>`;
+      flashEl.hidden = false;
+      flashEl.classList.remove("go"); void flashEl.offsetWidth; flashEl.classList.add("go");
+      clearTimeout(restFlash.t); restFlash.t = setTimeout(() => (flashEl.hidden = true), 3500);
+    }
+    flashEl.addEventListener("click", () => (flashEl.hidden = true));
+    function restDone(lateBy) {
+      rest = null; expanded = false; saveRest();
+      if (document.visibilityState === "hidden") { endedWhileAway = Date.now() - lateBy * 1000; return; }
+      beep(); if (navigator.vibrate) navigator.vibrate([300, 120, 300, 120, 300]);
+      restFlash("Rest's up. Next set!");
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      if (rest && rest.end <= Date.now()) { const late = Math.round((Date.now() - rest.end) / 1000); rest = null; saveRest(); endedWhileAway = Date.now() - late * 1000; }
+      if (endedWhileAway) { const ago = Math.round((Date.now() - endedWhileAway) / 1000); endedWhileAway = null; beep(); restFlash(ago > 5 ? `Rest finished ${secOut(ago)} ago` : "Rest's up. Next set!"); }
       tick();
+    });
+    function startRest(sec, label) {
+      if (!(sec > 0)) return;
+      unlockAudio(); // must happen during the tap so the end beep is allowed to play
+      rest = { end: Date.now() + sec * 1000, total: sec, label: label || "" };
+      saveRest(); tick();
     }
     function tick() {
       if (rest) {
-        const left = Math.round((rest.end - Date.now()) / 1000);
-        if (left <= 0) { rest = null; beep(); if (navigator.vibrate) navigator.vibrate([200, 100, 200]); }
+        const ms = rest.end - Date.now(), left = Math.ceil(ms / 1000);
+        if (left <= 0) restDone(Math.round(-ms / 1000));
         else {
-          restBar.hidden = false;
+          const frac = Math.max(0, Math.min(1, ms / 1000 / rest.total));
+          restBar.hidden = expanded; restFull.hidden = !expanded;
           restBar.querySelector("#rest-left").textContent = secOut(left);
-          restBar.querySelector("#rest-prog").style.width = Math.max(0, Math.min(100, (left / rest.total) * 100)) + "%";
+          restBar.querySelector("#rest-prog").style.width = frac * 100 + "%";
+          restFull.querySelector("#rf-left").textContent = secOut(left);
+          restFull.querySelector("#rf-total").textContent = `of ${secOut(Math.round(rest.total))}`;
+          restFull.querySelector("#rf-arc").setAttribute("stroke-dashoffset", String(CIRC * (1 - frac)));
+          restFull.querySelector("#rf-next").textContent = rest.label;
         }
       }
-      if (!rest) restBar.hidden = true;
+      if (!rest) { restBar.hidden = true; restFull.hidden = true; }
+      document.body.classList.toggle("resting", !!rest && !expanded);
       const el = document.getElementById("wk-elapsed");
       if (el && S.active) el.textContent = clock(Date.now() - S.active.start);
       const bn = document.getElementById("wk-banner-time");
       if (bn && S.active) bn.textContent = clock(Date.now() - S.active.start);
     }
-    setInterval(tick, 500);
+    setInterval(tick, 250);
     const clock = (ms) => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s % 60).padStart(2, "0"); };
     async function keepAwake() {
       if (!S.active || wake || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
@@ -208,7 +259,9 @@
           s.done = true;
           s.pr = W.setPRs(s, def, S.workouts, S.active.start);
           if (s.pr.length && navigator.vibrate) navigator.vibrate(80);
-          startRest(s.type === "w" ? Math.min(60, ex.rest || 0) : ex.rest);
+          const nextIdx = ex.sets.findIndex((x, k) => k > j && !x.done);
+          const label = nextIdx >= 0 ? `Next: ${def.name}, set ${nextIdx + 1}` : (S.active.exercises[i + 1] ? `Next: ${exDef(S.active.exercises[i + 1].exId).name}` : "Last set done. Finish when you're ready.");
+          startRest(s.type === "w" ? Math.min(60, ex.rest || 0) : ex.rest, label);
         } else { s.done = false; s.pr = []; }
         saveActive(true); app.render();
       }));
@@ -237,7 +290,7 @@
       $("#wk-add").onclick = () => picker((ids) => { for (const id of ids) S.active.exercises.push(exFromRoutine({ exId: id })); saveActive(true); app.render(); });
       $("#wk-finish").onclick = finishPrompt;
       $("#wk-discard").onclick = () => sheet(head("Discard workout?") + `<p style="margin:0">Nothing from this workout will be saved.</p><div class="row"><button class="btn" type="button" id="dc-yes" style="flex:1;background:var(--protein);color:#fff">Discard</button><button class="btn ghost" type="button" data-close>Keep going</button></div>`, (el) => {
-        el.querySelector("#dc-yes").onclick = () => { S.active = null; rest = null; saveActive(true); app.closeSheet(); app.render(); };
+        el.querySelector("#dc-yes").onclick = () => { S.active = null; rest = null; saveRest(); tick(); saveActive(true); app.closeSheet(); app.render(); };
       });
       keepAwake();
     }
@@ -280,7 +333,7 @@
       };
       const sum = W.summary(w, exIndex(), S.workouts);
       store.workout(w);
-      S.active = null; rest = null; saveActive(true);
+      S.active = null; rest = null; saveRest(); tick(); saveActive(true);
       if (wake) { wake.release().catch(() => {}); wake = null; }
       app.render();
       const count = Object.keys(S.workouts).length;
