@@ -730,8 +730,8 @@
       chartPts = pts.map((p, i) => ({ ...p, cx: x(i), cy: y(p.v), unitLabel, asTime }));
       return `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Progress chart">${grid}
         <text x="${L}" y="${H - 6}" font-size="11" fill="var(--muted)">${d(pts[0].date)}</text><text x="${Wd - R}" y="${H - 6}" text-anchor="end" font-size="11" fill="var(--muted)">${d(pts[pts.length - 1].date)}</text>
-        <path d="${line}" fill="none" stroke="var(--protein)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        ${pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${i === pts.length - 1 ? 4.5 : 3}" fill="var(--protein)" stroke="var(--card)" stroke-width="2"/>`).join("")}
+        <path d="${line}" fill="none" stroke="var(--ink)" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        ${pts.map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="${i === pts.length - 1 ? 4.5 : 2.5}" fill="${i === pts.length - 1 ? "var(--accent)" : "var(--ink)"}" stroke="var(--card)" stroke-width="2"/>`).join("")}
         <line id="lc-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/>
         <rect x="${L}" y="${T}" width="${Wd - L - R}" height="${H - T - B}" fill="transparent" id="lc-hit"/></svg><div class="tip" id="lc-tip" hidden></div>`;
     }

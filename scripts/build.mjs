@@ -14,7 +14,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 const RESET = `<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>`;
-const SCRIPTS = ["commonfoods.js", "nutrition.js", "exercises.js", "workouts.js", "train.js"];
+const SCRIPTS = ["commonfoods.js", "nutrition.js", "exercises.js", "workouts.js", "train.js", "importers.js"];
 
 // Head-only tags (title, meta, link, style) lead the source; the rest is body.
 function wrap(src, extraHead = "", extraBody = "") {
@@ -28,8 +28,8 @@ export function demoPage(src) {
 
 const app = readFileSync(join(root, "index.html"), "utf8");
 writeFileSync(join(out, "index.html"), wrap(app, `<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#F3F4F2" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#121315" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F3F3F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B0B0C" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">

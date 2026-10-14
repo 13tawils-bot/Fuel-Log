@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
       - name: Test
-        run: node --test nutrition.test.js workouts.test.js
+        run: node --test nutrition.test.js workouts.test.js importers.test.js
       - name: Build
         run: node scripts/build.mjs
       - name: Publish to gh-pages
