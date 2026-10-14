@@ -1096,16 +1096,16 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   const ME_PAGES = {
     details: ["Your details", "Goal, weight, height, units"],
     foods: ["My foods", "Foods and saved meals"],
-    health: ["Apple Health", "Steps, sleep and weight"],
+    health: ["Apple Health", "Import your export file, or the daily shortcut"],
     claude: ["Claude features", "Meal photos and coaching"],
-    imports: ["Import data", "Hevy workouts, Apple Health history"],
+    imports: ["Import files", "Hevy CSV and Apple Health export.zip"],
     backup: ["Backup", "Save or restore a backup file"],
   };
   function meView(t) {
     const back = `<button class="link" type="button" id="me-back" style="justify-self:start">‹ Me</button>`;
     if (meSub === "details") { draft = draft || { ...S.profile, startWeight: N.latestWeight(S.weights) || S.profile.startWeight }; return `<div class="app" style="gap:14px">${back}${profileForm(draft, "Save details")}</div>`; }
     if (meSub === "foods") return `<div class="app" style="gap:14px">${back}${foodsView()}</div>`;
-    if (meSub === "health") return `<div class="app" style="gap:14px">${back}${healthCard()}</div>`;
+    if (meSub === "health") return `<div class="app" style="gap:14px">${back}${healthFileCard()}${healthCard()}</div>`;
     if (meSub === "claude") return `<div class="app" style="gap:14px">${back}${claudeCard()}</div>`;
     if (meSub === "backup") return `<div class="app" style="gap:14px">${back}${backupCard()}</div>`;
     if (meSub === "imports") return `<div class="app" style="gap:14px">${back}${importCards()}</div>`;
@@ -1168,12 +1168,15 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
       <label class="btn wide file-btn">Choose Hevy CSV<input type="file" id="hevy-file" accept=".csv,text/csv"></label>
       ${hevyCount ? `<p class="small muted" style="margin:0">${hevyCount} Hevy workout${hevyCount > 1 ? "s" : ""} imported so far. Importing a newer export only adds what's new.</p>` : ""}
       <div id="hevy-out"></div></section>
-    <section class="card"><h2>Apple Health history</h2>
+    ${healthFileCard()}`;
+  }
+  function healthFileCard() {
+    return `<section class="card"><h2>Import Apple Health file</h2>
       <p class="small muted" style="margin:0">Fill in your steps, active calories, sleep and weight for the last six months in one go. The file is read on this device; nothing is uploaded.</p>
       <ol class="steps"><li>In the <strong>Health</strong> app, tap your profile picture (top right).</li><li>Scroll down, tap <strong>Export All Health Data</strong>, then <strong>Export</strong>. It can take a minute.</li><li>Choose <strong>Save to Files</strong>, then pick <code>export.zip</code> below.</li></ol>
       <label class="btn ghost wide file-btn">Choose export.zip<input type="file" id="hx-file" accept=".zip,.xml,application/zip,text/xml"></label>
       <div id="hx-out"></div>
-      <p class="small muted" style="margin:0">For day-to-day updates, use the Health shortcut (Me → Apple Health).</p></section>`;
+      <p class="small muted" style="margin:0">No need to paste anything for this. For quick daily updates afterwards, the Daily shortcut in Me → Apple Health is faster.</p></section>`;
   }
   // Save many records without overwhelming the store: one at a time in your Claude account, all at once on the device.
   async function bulkSave(list, progress) {
@@ -1317,7 +1320,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   let lastCheckIn = null;
   function healthCard() {
     const days = Object.keys(S.health).length;
-    return `<section class="card"><div class="row spread"><h2>Apple Health</h2><button class="btn small" type="button" id="h-import2">Import</button></div>
+    return `<section class="card"><div class="row spread"><h2>Daily shortcut</h2><button class="btn small" type="button" id="h-import2">Paste</button></div>
       <p class="small muted" style="margin:0">${days ? `Steps, active calories and sleep for ${days} day${days > 1 ? "s" : ""} so far. They feed the weekly check-in and the patterns above.` : "Bring in steps, active calories, sleep and weight, and send what you eat to Health. Apple only lets its own apps read Health directly, so this uses two shortcuts you set up once."}</p>
       <details class="how"><summary>Set up: Health to Fuel Log</summary><ol>
         <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, name it <code>Health to Fuel Log</code>.</li>
@@ -1349,7 +1352,7 @@ weight: [Weight]</pre></li>
     $("#view").querySelectorAll("[data-me]").forEach((b) => (b.onclick = () => { meSub = b.dataset.me; render(); window.scrollTo(0, 0); }));
     if (meSub === "details") bindProfile();
     if (meSub === "foods") bind.foods();
-    if (meSub === "imports") bindImports();
+    if (meSub === "imports" || meSub === "health") bindImports();
     const ks = $("#key-save"); if (ks) ks.onclick = () => { const v = $("#key-in").value.trim(); if (!/^sk-ant-/.test(v)) { flash("That doesn't look like an Anthropic API key. It starts with sk-ant-."); return; } try { localStorage.setItem(AI_KEY, v); } catch (e) {} render(); flash("Key saved. Photo-of-meal logging is now on the Add food screen.", "good"); };
     const kd = $("#key-del"); if (kd) kd.onclick = () => { try { localStorage.removeItem(AI_KEY); } catch (e) {} render(); };
     const hi2 = $("#h-import2"); if (hi2) hi2.onclick = () => openSheet({ step: "health" });
@@ -1546,9 +1549,11 @@ weight: [Weight]</pre></li>
     } else if (sh.step === "health") {
       el.innerHTML = head("Import from Apple Health") + `
         <p class="small muted" style="margin:0">Run your <strong>Health to Fuel Log</strong> shortcut, come back here, then paste. Setup steps are in Me → Apple Health.</p>
+        <button class="btn ghost wide" type="button" id="h-file">I have an export file instead</button>
         ${!inClaude ? `<button class="btn wide" type="button" id="h-clip">Paste from clipboard</button>` : ""}
         <textarea id="h-text" rows="5" placeholder="Or paste the copied text here"></textarea>
         ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}`;
+      $("#h-file").onclick = () => { dlg.close(); tab = "me"; meSub = "health"; render(); window.scrollTo(0, 0); };
       const apply = (text) => {
         const h = N.parseHealth(text, today());
         if (!h) { sh.status = "That doesn't look like the shortcut's text. It should start with a line saying Fuel Log."; sh.statusKind = "warn"; drawSheet(); return; }
