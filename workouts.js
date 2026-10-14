@@ -191,7 +191,7 @@
     return { pct: Math.round((pcts.reduce((x, y) => x + y, 0) / pcts.length) * 10) / 10, lifts: lifts.length };
   }
 
-  const PR_LABELS = { weight: "Heaviest weight", "1RM": "Best est. 1RM", volume: "Best set volume", reps: "Most reps", time: "Longest time", distance: "Furthest distance" };
+  const PR_LABELS = { weight: "Heaviest weight", "1RM": "Strongest set", volume: "Most weight × reps", reps: "Most reps", time: "Longest time", distance: "Furthest distance" };
 
   // Every record an exercise has set, in order. The first session is the
   // baseline; each later set that beats a best is a PR, like a gym app's records tab.

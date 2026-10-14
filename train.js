@@ -240,7 +240,7 @@
       return `<div class="app" style="gap:14px">
         <section class="card wk-head">
           <div class="row" style="flex-wrap:nowrap"><input class="wk-name" id="wk-name" value="${esc(a.name)}" aria-label="Workout name"><button class="btn small" type="button" id="wk-finish">Finish</button></div>
-          <div class="wk-stats"><div><span>Duration</span><b id="wk-elapsed" style="color:var(--primary)">${clock(Date.now() - a.start)}</b></div><div><span>Volume</span><b>${fmtVol(vol)}</b></div><div><span>Sets</span><b>${done}</b></div></div>
+          <div class="wk-stats"><div><span>Duration</span><b id="wk-elapsed" style="color:var(--primary)">${clock(Date.now() - a.start)}</b></div><div><span>Lifted</span><b>${fmtVol(vol)}</b></div><div><span>Sets</span><b>${done}</b></div></div>
         </section>
         ${cards || `<div class="card"><p class="empty" style="margin:0">Add your first exercise to start logging sets.</p></div>`}
         <button class="btn wide" type="button" id="wk-add">+ Add exercises</button>
@@ -361,7 +361,7 @@
       app.render();
       const count = Object.keys(S.workouts).length;
       sheet(head("Workout saved") + `
-        <div class="preview"><div><b>${fmtDur(sum.durationMin)}</b><span>time</span></div><div><b>${sum.sets}</b><span>sets</span></div><div><b style="font-size:1.1rem">${fmtVol(sum.volume)}</b><span>volume</span></div><div><b>${sum.prs.length}</b><span>PRs</span></div></div>
+        <div class="preview"><div><b>${fmtDur(sum.durationMin)}</b><span>time</span></div><div><b>${sum.sets}</b><span>sets</span></div><div><b style="font-size:1.1rem">${fmtVol(sum.volume)}</b><span>lifted</span></div><div><b>${sum.prs.length}</b><span>PRs</span></div></div>
         ${sum.prs.length ? `<div class="pr-list">${Object.entries(sum.prs.reduce((g, p) => ((g[p.exercise] ||= []).push(p), g), {})).map(([name, list]) => `<div class="pr-row"><span class="pr-ic">${TROPHY}</span><div><strong>${esc(name)}</strong><span>${list.map((p) => W.PR_LABELS[p.kind]).join(", ")}: ${esc(fmtSet(list[list.length - 1].set, exDef(w.exercises.find((e) => exDef(e.exId).name === name)?.exId).type))}</span></div></div>`).join("")}</div>` : ""}
         <div><h3 style="margin-bottom:6px">Vs last time</h3>${w.exercises.map((ex) => { const def = exDef(ex.exId); const c = W.compareToLast(def, ex.sets, S.workouts, w.start);
           const fmt = (v, m) => (m === "volume" ? fmtVol(v) : m === "sec" ? secOut(v) : m === "km" ? v.toFixed(2) + " km" : v + " reps");
@@ -574,15 +574,40 @@
 
     // ---------- Train home ----------
     let sub = { kind: "home" }, chartMetric = "e1rm";
+    // Workout tab: only what you need to start training.
     function homeView() {
-      const idx = exIndex();
-      const workouts = Object.values(S.workouts).sort((a, b) => b.start - a.start);
       const routines = Object.values(S.routines).sort((a, b) => a.name.localeCompare(b.name));
-      const ms = W.muscleSets(S.workouts, idx);
-      const muscleRows = Object.entries(ms).filter(([m]) => m !== "full body").sort((a, b) => b[1] - a[1]);
       const weeks = W.weeklyCounts(S.workouts);
       const thisWeek = weeks[weeks.length - 1];
-      // Exercises you train most, with change in estimated strength.
+      return `<div class="app" style="gap:14px">
+        ${programmeCard()}
+        <section class="card">
+          <div class="row spread"><h2>${programme() ? "Or do something else" : "Start a workout"}</h2><span class="small muted">${thisWeek} this week</span></div>
+          ${routines.map((r) => `<div class="entry" style="grid-template-columns:minmax(0,1fr) auto auto"><div><div class="nm">${esc(r.name)}</div><div class="sub">${esc(r.exercises.map((e) => exDef(e.exId).name.replace(/ \(.*\)$/, "")).slice(0, 3).join(", "))}${r.exercises.length > 3 ? ` +${r.exercises.length - 3}` : ""}</div></div>
+            <button class="btn ghost small" type="button" data-rtedit="${esc(r.id)}" aria-label="Edit ${esc(r.name)}">Edit</button><button class="btn small" type="button" data-rtstart="${esc(r.id)}">Start</button></div>`).join("")}
+          <div class="row" style="flex-wrap:nowrap"><button class="btn ghost" type="button" id="tr-empty" style="flex:1">+ Empty workout</button><button class="btn ghost" type="button" id="rt-new" style="flex:1">+ New routine</button></div>
+          ${S.profile && S.profile.programme === false ? `<button class="link small" type="button" id="prog-show" style="justify-self:start">Try a ready-made programme</button>` : ""}
+        </section>
+        ${calendarCard()}
+      </div>`;
+    }
+    function bindHome() {
+      const v = $("#view");
+      $("#tr-empty").onclick = () => startWorkout({});
+      bindProgramme(); bindCalendar();
+      const ps = $("#prog-show"); if (ps) ps.onclick = () => { store.profile({ ...S.profile, programme: null }); app.render(); };
+      $("#rt-new").onclick = () => routineEditor(null);
+      v.querySelectorAll("[data-rtedit]").forEach((b) => (b.onclick = () => routineEditor(S.routines[b.dataset.rtedit])));
+      v.querySelectorAll("[data-rtstart]").forEach((b) => (b.onclick = () => { const r = S.routines[b.dataset.rtstart]; startWorkout({ name: r.name, routineId: r.id, exercises: r.exercises.map(exFromRoutine) }); }));
+    }
+
+    // Progress tab: everything that answers "am I getting stronger?"
+    function progressView(afterLifts = "") {
+      const idx = exIndex();
+      const workouts = Object.values(S.workouts).sort((a, b) => b.start - a.start);
+      if (!workouts.length) return `<section class="card"><h2>Strength</h2><p class="empty" style="margin:0">Finish your first workout and your lifts, records and progress show up here.</p></section>` + afterLifts;
+      const ms = W.muscleSets(S.workouts, idx);
+      const muscleRows = Object.entries(ms).filter(([m]) => m !== "full body").sort((a, b) => b[1] - a[1]);
       const freq = {};
       const since = Date.now() - 60 * 86400000;
       for (const w of workouts) if (w.start >= since) for (const ex of w.exercises) freq[ex.exId] = (freq[ex.exId] || 0) + 1;
@@ -593,66 +618,39 @@
         const val = (p) => (p ? p[metric] : 0);
         const chg = first && last && val(first) ? Math.round(((val(last) - val(first)) / val(first)) * 100) : null;
         const shown = metric === "e1rm" ? `${wOut(val(last))} ${wu()}` : metric === "sec" ? secOut(val(last)) : metric === "km" ? `${val(last)} km` : `${val(last)} reps`;
-        return { def, shown, chg, sessions: ser.length, label: metric === "e1rm" ? "est. 1RM" : metric === "reps" ? "best set" : "best" };
+        return { def, shown, chg, sessions: ser.length, label: metric === "e1rm" ? "estimated max" : metric === "reps" ? "best set" : "best" };
       });
-      return `<div class="app" style="gap:14px">
-        ${programmeCard()}
-        ${calendarCard()}
+      const o = W.overloadScore(S.workouts, idx);
+      const groups = [];
+      for (const p of W.recentPRs(S.workouts, idx, 60)) {
+        const g = groups.find((x) => x.exId === p.exId && x.workoutId === p.workoutId);
+        if (g) g.labels.push(p.label); else groups.push({ ...p, labels: [p.label] });
+      }
+      const recent = groups.slice(0, 5);
+      return `
         <section class="card">
-          <div class="row spread"><h2>Quick start</h2><span class="small muted">${thisWeek} workout${thisWeek === 1 ? "" : "s"} this week</span></div>
-          <button class="btn ${programme() ? "ghost " : ""}wide" type="button" id="tr-empty">+ Start Empty Workout</button>
-          ${S.profile && S.profile.programme === false ? `<button class="link small" type="button" id="prog-show" style="justify-self:start">Try a ready-made programme</button>` : ""}
+          <div class="row spread"><h2>Getting stronger</h2><span class="small muted">last 4 weeks</span></div>
+          ${o.total ? `<div class="overload"><div class="ov-ring" style="--p:${o.pct}"><b>${o.pct}%</b></div><div><strong>${o.improved} of ${o.total} lifts beat last time</strong><span>More weight, more reps or more total lifted than the session before. Over half means you're progressing well.</span></div></div>` : ""}
+          ${recent.length ? `<h3 style="margin-top:4px">Recent records</h3>` + recent.map((p) => `<button type="button" class="pr-row result" data-exinfo="${esc(p.exId)}"><span class="pr-ic">${TROPHY}</span><div><strong>${esc(exDef(p.exId).name)}</strong><span>${esc(fmtSet(p.set, exDef(p.exId).type))} · ${p.labels.join(", ")} · ${fmtDate(p.date, { day: "numeric", month: "short" })}</span></div></button>`).join("") : ""}
         </section>
         <section class="card">
-          <div class="row spread"><h2>Routines</h2><button class="btn ghost small" type="button" id="rt-new">New routine</button></div>
-          ${routines.length ? routines.map((r) => `<div class="entry"><div><div class="nm">${esc(r.name)}</div><div class="sub">${esc(r.exercises.map((e) => exDef(e.exId).name.replace(/ \(.*\)$/, "")).slice(0, 4).join(", "))}${r.exercises.length > 4 ? ` +${r.exercises.length - 4}` : ""}</div></div>
-            <button class="btn ghost small" type="button" data-rtedit="${esc(r.id)}">Edit</button><button class="btn small" type="button" data-rtstart="${esc(r.id)}">Start</button></div>`).join("")
-            : `<p class="empty">Routines are workouts you repeat, like Push, Pull and Legs. Build one here, or save a finished workout as a routine.</p>`}
+          <div class="row spread"><h2>Your lifts</h2><button class="btn ghost small" type="button" id="ex-find">Find exercise</button></div>
+          ${top.map((x) => `<button type="button" class="result" data-exinfo="${esc(x.def.id)}"><span><span>${esc(x.def.name)}</span><br><span class="small muted">${x.sessions} session${x.sessions > 1 ? "s" : ""} · ${x.label}</span></span>
+            <span style="text-align:right"><span class="num">${x.shown}</span><br>${x.chg != null && x.sessions > 1 ? `<span class="small" style="color:${x.chg > 0 ? "var(--good)" : x.chg < 0 ? "var(--warn)" : "var(--muted)"}">${x.chg > 0 ? "▲ " : x.chg < 0 ? "▼ " : ""}${Math.abs(x.chg)}%</span>` : ""}</span></button>`).join("")}
         </section>
-        ${(() => {
-          const o = W.overloadScore(S.workouts, idx);
-          // One line per lift per workout, listing every record that set beat.
-          const groups = [];
-          for (const p of W.recentPRs(S.workouts, idx, 60)) {
-            const g = groups.find((x) => x.exId === p.exId && x.workoutId === p.workoutId);
-            if (g) g.labels.push(p.label); else groups.push({ ...p, labels: [p.label] });
-          }
-          const recent = groups.slice(0, 6);
-          if (!recent.length && o.total === 0) return "";
-          return `<section class="card">
-            <div class="row spread"><h2>Progress & PRs</h2><span class="small muted">last 4 weeks</span></div>
-            ${o.total ? `<div class="overload"><div class="ov-ring" style="--p:${o.pct}"><b>${o.pct}%</b></div><div><strong>Progressive overload</strong><span>${o.improved} of ${o.total} exercises beat the previous session: more weight, more reps or more volume. Aim for over half.</span></div></div>` : ""}
-            ${recent.length ? `<h3 style="margin-top:4px">Recent PRs</h3>` : ""}
-            ${recent.map((p) => `<button type="button" class="pr-row result" data-exinfo="${esc(p.exId)}"><span class="pr-ic">${TROPHY}</span><div><strong>${esc(exDef(p.exId).name)}</strong><span>${esc(fmtSet(p.set, exDef(p.exId).type))} · ${p.labels.join(", ")} · ${fmtDate(p.date, { day: "numeric", month: "short" })}</span></div></button>`).join("")}
-          </section>`; })()}
+        ${afterLifts}
+        ${muscleRows.length ? `<section class="card">
+          <div class="row spread"><h2>Sets per muscle</h2><span class="small muted">this week</span></div>
+          <div class="mbars">${muscleRows.map(([m, n]) => `<div class="mbar"><span>${cap(m)}</span><div class="track"><b style="width:${Math.min(100, (n / 20) * 100)}%;background:${n >= 10 ? "var(--good)" : "var(--ink)"}"></b><i style="left:50%"></i></div><span class="num">${Math.round(n * 10) / 10}</span></div>`).join("")}</div>
+          <p class="small muted" style="margin:0">Aim for 10 to 20 hard sets a week for each muscle you want to grow (the line marks 10).</p></section>` : ""}
         <section class="card">
-          <div class="row spread"><h2>Strength</h2><button class="btn ghost small" type="button" id="ex-find">Find exercise</button></div>
-          ${top.length ? top.map((x) => `<button type="button" class="result" data-exinfo="${esc(x.def.id)}"><span><span>${esc(x.def.name)}</span><br><span class="small muted">${x.sessions} session${x.sessions > 1 ? "s" : ""} · ${x.label}</span></span>
-            <span style="text-align:right"><span class="num">${x.shown}</span><br>${x.chg != null && x.sessions > 1 ? `<span class="small" style="color:${x.chg > 0 ? "var(--good)" : x.chg < 0 ? "var(--warn)" : "var(--muted)"}">${x.chg > 0 ? "▲ " : x.chg < 0 ? "▼ " : ""}${Math.abs(x.chg)}%</span>` : ""}</span></button>`).join("")
-            : `<p class="empty">Your most-trained lifts appear here with how much stronger you're getting.</p>`}
-        </section>
-        <section class="card">
-          <div class="row spread"><h2>Sets per muscle</h2><span class="small muted">last 7 days</span></div>
-          ${muscleRows.length ? `<div class="mbars">${muscleRows.map(([m, n]) => `<div class="mbar"><span>${cap(m)}</span><div class="track"><b style="width:${Math.min(100, (n / 20) * 100)}%;background:${n >= 10 ? "var(--good)" : "var(--ink)"}"></b><i style="left:50%"></i></div><span class="num">${Math.round(n * 10) / 10}</span></div>`).join("")}</div>
-            <p class="small muted" style="margin:0">10–20 hard sets a week per muscle is the usual range for growth. The mark shows 10. Secondary muscles count half a set.</p>`
-            : `<p class="empty">Log a workout to see how many sets each muscle gets.</p>`}
-        </section>
-        <section class="card">
-          <h2>History</h2>
-          ${workouts.length ? workouts.slice(0, 15).map((w) => { const s = W.summary(w, idx, S.workouts); return `<button type="button" class="result" data-wk="${esc(w.id)}"><span><span>${esc(w.name)}</span><br><span class="small muted">${fmtDate(w.date)}, ${timeOf(w.start)} · ${fmtDur(s.durationMin)} · ${s.sets} sets</span></span><span class="small" style="text-align:right"><span class="num">${fmtVol(s.volume)}</span>${s.prs.length ? `<br><span class="prb">${s.prs.length} PR</span>` : ""}</span></button>`; }).join("")
-            : `<p class="empty">Finished workouts appear here.</p>`}
-        </section>
-      </div>`;
+          <h2>Workout history</h2>
+          ${workouts.slice(0, 5).map((w) => { const s = W.summary(w, idx, S.workouts); return `<button type="button" class="result" data-wk="${esc(w.id)}"><span><span>${esc(w.name)}</span><br><span class="small muted">${fmtDate(w.date)}, ${timeOf(w.start)} · ${fmtDur(s.durationMin)} · ${s.sets} sets</span></span><span class="small" style="text-align:right"><span class="num">${fmtVol(s.volume)}</span>${s.prs.length ? `<br><span class="prb">${TROPHY}${s.prs.length} PR</span>` : ""}</span></button>`; }).join("")}
+        </section>`;
     }
-    function bindHome() {
+    function bindProgress() {
       const v = $("#view");
-      $("#tr-empty").onclick = () => startWorkout({});
-      bindProgramme(); bindCalendar();
-      const ps = $("#prog-show"); if (ps) ps.onclick = () => { store.profile({ ...S.profile, programme: null }); app.render(); };
-      $("#rt-new").onclick = () => routineEditor(null);
-      $("#ex-find").onclick = () => picker((ids) => openExercise(ids[0]), { single: true });
-      v.querySelectorAll("[data-rtedit]").forEach((b) => (b.onclick = () => routineEditor(S.routines[b.dataset.rtedit])));
-      v.querySelectorAll("[data-rtstart]").forEach((b) => (b.onclick = () => { const r = S.routines[b.dataset.rtstart]; startWorkout({ name: r.name, routineId: r.id, exercises: r.exercises.map(exFromRoutine) }); }));
+      const ef = $("#ex-find"); if (ef) ef.onclick = () => picker((ids) => openExercise(ids[0]), { single: true });
       v.querySelectorAll("[data-exinfo]").forEach((b) => (b.onclick = () => openExercise(b.dataset.exinfo)));
       v.querySelectorAll("[data-wk]").forEach((b) => (b.onclick = () => workoutDetail(S.workouts[b.dataset.wk])));
     }
@@ -671,10 +669,10 @@
     }
 
     // ---------- Exercise detail ----------
-    function openExercise(id) { app.closeSheet(); sub = { kind: "exercise", id }; chartMetric = null; app.go("train"); window.scrollTo(0, 0); }
+    function openExercise(id) { app.closeSheet(); const from = app.tab(); sub = { kind: "exercise", id, from: from === "train" ? "train" : "progress" }; chartMetric = null; app.go(sub.from); window.scrollTo(0, 0); }
     function exerciseView() {
       const def = exDef(sub.id), b = W.bests(def.id, S.workouts), ser = W.series(def, S.workouts);
-      const metrics = def.type === "wr" ? [["e1rm", "Est. 1RM"], ["topKg", "Heaviest"], ["volume", "Volume"]]
+      const metrics = def.type === "wr" ? [["e1rm", "Strength"], ["topKg", "Heaviest"], ["volume", "Total lifted"]]
         : def.type === "bw" ? [["reps", "Best set"], ["topKg", "Added weight"]]
         : def.type === "as" ? [["reps", "Best set"]]
         : def.type === "du" ? [["sec", "Longest"]] : [["km", "Distance"], ["sec", "Time"]];
@@ -683,18 +681,18 @@
       const pts = ser.map((p) => ({ date: p.date, v: isW ? Number(wOut(p[chartMetric])) : p[chartMetric] })).filter((p) => p.v > 0);
       const hist = W.sessions(def.id, S.workouts).reverse().slice(0, 12);
       const tiles = def.type === "wr"
-        ? [["Est. 1RM", b.e1rm ? `${wOut(b.e1rm.value)}` : "–", wu()], ["Heaviest", b.kg ? `${wOut(b.kg.kg)}` : "–", b.kg ? `× ${b.kg.reps}` : ""], ["Best set", b.volume ? `${wOut(b.volume.kg)}×${b.volume.reps}` : "–", ""]]
+        ? [["Est. max", b.e1rm ? `${wOut(b.e1rm.value)}` : "–", wu()], ["Heaviest", b.kg ? `${wOut(b.kg.kg)}` : "–", b.kg ? `× ${b.kg.reps}` : ""], ["Best set", b.volume ? `${wOut(b.volume.kg)}×${b.volume.reps}` : "–", ""]]
         : def.type === "du" ? [["Longest", b.duration ? secOut(b.duration.sec) : "–", ""]]
         : def.type === "cd" ? [["Furthest", b.distance ? b.distance.km + " km" : "–", ""]]
         : [["Most reps", b.reps ? b.reps.reps : "–", ""], ["Heaviest", b.kg ? "+" + wOut(b.kg.kg) : "–", b.kg ? wu() : ""]];
       return `<div class="app" style="gap:14px">
-        <button class="link" type="button" id="ex-back" style="justify-self:start">‹ Train</button>
+        <button class="link" type="button" id="ex-back" style="justify-self:start">‹ ${sub.from === "train" ? "Workout" : "Progress"}</button>
         <section class="card">
           <div><h2>${esc(def.name)}</h2><p class="small muted" style="margin:2px 0 0">${cap(def.primary)}${def.secondary.length ? " · also " + def.secondary.join(", ") : ""} · ${esc(def.equipment)}</p></div>
           <div class="stats">${tiles.map(([k, v, s]) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join("")}</div>
           ${metrics.length > 1 ? `<div class="seg" id="ex-metric">${metrics.map(([k, l]) => `<button type="button" data-v="${k}" aria-pressed="${k === chartMetric}">${l}</button>`).join("")}</div>` : ""}
           <div class="chart-wrap">${lineChart(pts, isW ? wu() : chartMetric === "sec" ? "s" : chartMetric === "km" ? "km" : "reps", chartMetric === "sec")}</div>
-          ${def.type === "wr" ? `<p class="small muted" style="margin:0">Estimated 1RM uses the Epley formula on your best working set each session, so you can see strength rising without testing a true max.</p>` : ""}
+          ${def.type === "wr" ? `<p class="small muted" style="margin:0">"Strength" is the most you could lift once, estimated from your best set each session, so you can watch it rise without ever testing a max.</p>` : ""}
         </section>
         ${(() => { const prs = W.prHistory(def, S.workouts).reverse();
           return `<section class="card"><div class="row spread"><h2>Personal records</h2><span class="small muted">${prs.length} PR${prs.length === 1 ? "" : "s"}</span></div>
@@ -705,7 +703,7 @@
       </div>`;
     }
     function bindExercise() {
-      $("#ex-back").onclick = () => { sub = { kind: "home" }; app.render(); };
+      $("#ex-back").onclick = () => { sub = { kind: "home" }; app.render(); window.scrollTo(0, 0); };
       const m = $("#ex-metric"); if (m) m.onclick = (e) => { const b = e.target.closest("button"); if (b) { chartMetric = b.dataset.v; app.render(); } };
       $("#ex-start").onclick = () => {
         const ex = exFromRoutine({ exId: sub.id });
@@ -862,8 +860,20 @@
 
     // ---------- Public ----------
     return {
-      view() { return S.active && sub.kind !== "exercise" ? activeView() : sub.kind === "exercise" ? exerciseView() : homeView(); },
-      bind() { if (S.active && sub.kind !== "exercise") bindActive(); else if (sub.kind === "exercise") bindExercise(); else bindHome(); },
+      view() { return sub.kind === "exercise" && sub.from === "train" ? exerciseView() : S.active ? activeView() : homeView(); },
+      bind() { if (sub.kind === "exercise" && sub.from === "train") bindExercise(); else if (S.active) bindActive(); else bindHome(); },
+      progressView(after) { return sub.kind === "exercise" && sub.from === "progress" ? exerciseView() : progressView(after); },
+      bindProgress() { if (sub.kind === "exercise" && sub.from === "progress") bindExercise(); else bindProgress(); },
+      inExercise() { return sub.kind === "exercise"; },
+      // For the "Next up" card on Today.
+      nextUp() {
+        if (S.active) return null;
+        const n = nextSession();
+        if (n) return { name: n.session.name, mins: Math.round(n.session.ex.reduce((a, [, sets, , r]) => a + sets * (r + 45), 0) / 300) * 5, start: () => startProgramme(false) };
+        const r = Object.values(S.routines)[0];
+        return r ? { name: null, start: () => app.go("train") } : null;
+      },
+      trainedOn(d) { return Object.values(S.workouts).some((w) => w.date === d); },
       banner() {
         return S.active ? `<button class="banner" type="button" id="wk-resume"><span><strong>Workout in progress</strong><br><span class="small"><span class="num" id="wk-banner-time">${clock(Date.now() - S.active.start)}</span> · ${esc(S.active.name)}</span></span><span aria-hidden="true">›</span></button>` : "";
       },
