@@ -532,7 +532,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   }
   function saveLocal() {
     try { const { active, ...rest } = S; localStorage.setItem(LOCAL, JSON.stringify(rest)); }
-    catch (e) { flash("This device is out of storage space for Fuel Log. Copy a backup from the Plan tab."); }
+    catch (e) { flash("This device is out of storage space for Fuel Log. Save a backup from Me → Backup."); }
   }
   function write(ref, data) {
     const k = ref.path;
@@ -1545,7 +1545,7 @@ weight: [Weight]</pre></li>
       startCamera($("#cam"));
     } else if (sh.step === "health") {
       el.innerHTML = head("Import from Apple Health") + `
-        <p class="small muted" style="margin:0">Run your <strong>Health to Fuel Log</strong> shortcut, come back here, then paste. Setup steps are on the Plan tab.</p>
+        <p class="small muted" style="margin:0">Run your <strong>Health to Fuel Log</strong> shortcut, come back here, then paste. Setup steps are in Me → Apple Health.</p>
         ${!inClaude ? `<button class="btn wide" type="button" id="h-clip">Paste from clipboard</button>` : ""}
         <textarea id="h-text" rows="5" placeholder="Or paste the copied text here"></textarea>
         ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}`;
@@ -1717,7 +1717,7 @@ weight: [Weight]</pre></li>
   }
   function aiError(e) {
     const status = e && (e.status || (e.error && e.error.status));
-    if (status === 401) return "Your Anthropic API key was rejected. Check it on the Plan tab.";
+    if (status === 401) return "Your Anthropic API key was rejected. Check it in Me → Claude.";
     if (status === 429 || (e && e.code === "rate_limited")) return "Claude is busy. Try again in a minute.";
     if (e && e.code === "not_granted") return "Claude access wasn't allowed for this page.";
     if (e && e.code === "refusal") return "Claude couldn't help with that photo.";
