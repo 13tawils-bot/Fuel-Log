@@ -879,6 +879,28 @@
       },
       bindBanner() { const b = $("#wk-resume"); if (b) b.onclick = () => { sub = { kind: "home" }; app.go("train"); window.scrollTo(0, 0); }; },
       photosCard, bindPhotos,
+      // Backup files: photos stored on this device travel as data URLs.
+      async exportPhotos() {
+        const out = {};
+        for (const p of Object.values(S.photos)) {
+          if (p.assetId) continue;
+          const blob = await idbDo("readonly", (st) => st.get(p.id)).catch(() => null);
+          if (blob) out[p.id] = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob); });
+        }
+        return out;
+      },
+      async importPhotos(meta, data) {
+        let n = 0;
+        for (const p of Object.values(meta || {})) {
+          const url = data && data[p.id];
+          if (!url || S.photos[p.id]) continue;
+          const blob = await (await fetch(url)).blob();
+          await idbDo("readwrite", (st) => st.put(blob, p.id));
+          const { assetId, ...rest } = p;
+          store.photo(rest); n++;
+        }
+        return n;
+      },
       weekCount() { const w = W.weeklyCounts(S.workouts); return w[w.length - 1]; },
       reset() { sub = { kind: "home" }; },
       exIndex,

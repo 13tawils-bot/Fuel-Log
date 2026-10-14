@@ -865,6 +865,10 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
       const it = lastSuggestions[0];
       rows.push(`<div class="nu-row"><span class="nu-ic"><svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></span><div class="nu-txt"><strong>${protLeft}g protein to go</strong><span>${esc(it.food.name)} ${it.grams}g gives you ${it.n.p}g</span></div><button class="btn small" type="button" data-sugg="0">Add</button></div>`);
     }
+    const age = backupAge();
+    if (mode !== "db" && !DEMO && Object.keys(S.days).length >= 7 && (age == null || age > 14) && rows.length < 3) {
+      rows.push(`<div class="nu-row"><span class="nu-ic"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 19h14"/></svg></span><div class="nu-txt"><strong>Back up your log</strong><span>${age == null ? "You haven't saved a backup yet" : `Last backup ${age} days ago`}</span></div><button class="btn small" type="button" id="nu-backup">Back up</button></div>`);
+    }
     if (!rows.length) return `<section class="card nextup"><div class="nu-done">You're on top of things. Nothing to do right now.</div></section>`;
     return `<section class="card nextup"><h3>Next up</h3>${rows.slice(0, 3).join("")}</section>`;
   }
@@ -876,6 +880,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     $("#add").onclick = () => openSheet();
     $("#view").querySelectorAll("[data-addmeal]").forEach((b) => (b.onclick = () => openSheet({ meal: b.dataset.addmeal })));
     const nuU = $("#nu-usual"); if (nuU) nuU.onclick = () => { logMany(lastUsual); flash("Logged your usual.", "good"); };
+    const nuB = $("#nu-backup"); if (nuB) nuB.onclick = () => { tab = "me"; meSub = "backup"; render(); window.scrollTo(0, 0); };
     const nuT = $("#nu-train"); if (nuT) nuT.onclick = () => { const n = T.nextUp(); if (n) n.start(); };
     $("#view").querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
       const day = { ...(S.days[viewDate] || {}), entries: (S.days[viewDate]?.entries || []).slice() };
@@ -1093,7 +1098,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     health: ["Apple Health", "Steps, sleep and weight"],
     claude: ["Claude features", "Meal photos and coaching"],
     imports: ["Import data", "Hevy workouts, Apple Health history"],
-    backup: ["Backup", "Copy or restore your log"],
+    backup: ["Backup", "Save or restore a backup file"],
   };
   function meView(t) {
     const back = `<button class="link" type="button" id="me-back" style="justify-self:start">‹ Me</button>`;
@@ -1129,7 +1134,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     }
     const nextCi = S.profile.lastCheckIn ? Math.max(0, 7 - N.daysBetween(S.profile.lastCheckIn, today())) : null;
     const settings = Object.entries(ME_PAGES).filter(([k]) => k !== "claude" || !inClaude).map(([k, [title, sub]]) => {
-      const extra = k === "imports" ? (Object.values(S.workouts).some((w) => w.source === "hevy") ? "Hevy imported" : "") : k === "foods" ? `${Object.keys(S.foods).length} foods · ${Object.keys(S.meals).length} meals` : k === "claude" ? (apiKey() ? "On" : "Off") : k === "health" ? (Object.keys(S.health).length ? "Connected" : "Not set up") : "";
+      const extra = k === "backup" ? (mode === "db" ? "Synced" : ageText(backupAge())) : k === "imports" ? (Object.values(S.workouts).some((w) => w.source === "hevy") ? "Hevy imported" : "") : k === "foods" ? `${Object.keys(S.foods).length} foods · ${Object.keys(S.meals).length} meals` : k === "claude" ? (apiKey() ? "On" : "Off") : k === "health" ? (Object.keys(S.health).length ? "Connected" : "Not set up") : "";
       return `<button type="button" class="set-row" data-me="${k}"><span><strong>${title}</strong><span>${sub}</span></span><span class="small muted">${extra}</span><span aria-hidden="true" class="chev">›</span></button>`;
     }).join("");
     return `<div class="app" style="gap:14px">
@@ -1267,9 +1272,46 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
       } catch (e) { out("#hx-out", `<div class="status warn">${esc((e && e.message) || "Couldn't read that file.")} If it's very large, try again with your phone plugged in and the screen on.</div>`); }
     };
   }
+  const LAST_BACKUP = "fuel-log-last-backup";
+  const lastBackup = () => { try { return Number(localStorage.getItem(LAST_BACKUP)) || 0; } catch (e) { return 0; } };
+  const backupAge = () => { const t = lastBackup(); return t ? Math.floor((Date.now() - t) / 86400000) : null; };
+  const ageText = (d) => (d == null ? "Not saved yet" : d === 0 ? "Saved today" : d === 1 ? "Saved yesterday" : `Saved ${d} days ago`);
+  function backupData() {
+    return { app: "fuel-log", v: 4, saved: new Date().toISOString(), profile: S.profile, weights: S.weights, foods: S.foods, days: S.days, meals: S.meals, health: S.health,
+      workouts: S.workouts, routines: S.routines, exercises: S.exercises, measures: S.measures, photos: S.photos };
+  }
+  async function restoreData(b, includePhotos, progress) {
+    if (!b || b.app !== "fuel-log") throw new Error("That isn't a Fuel Log backup file.");
+    if (b.profile) store.profile(b.profile);
+    const list = [];
+    const add = (c, obj, map = (v) => v) => { for (const [id, v] of Object.entries(obj || {})) list.push([c, id, map(v)]); };
+    add("weights", b.weights); add("foods", b.foods); add("days", b.days); add("meals", b.meals); add("health", b.health);
+    add("workouts", b.workouts); add("routines", b.routines); add("exercises", b.exercises); add("measures", b.measures);
+    await bulkSave(list, progress);
+    const photos = includePhotos && b.photoData ? await T.importPhotos(b.photos, b.photoData) : 0;
+    return { records: list.length, photos };
+  }
   function backupCard() {
-    return `<section class="card"><h2>Backup</h2><p class="small muted" style="margin:0">${mode === "db" ? "Your log is saved to your Claude account and syncs wherever you open this page." : "Your log is saved on this device. Copy a backup now and then, and paste it here to restore."}</p>
-      <div class="row"><button class="btn ghost small" type="button" id="backup">Copy backup</button><button class="btn ghost small" type="button" id="restore">Restore from backup</button></div><div id="backup-out"></div></section>`;
+    if (mode === "db") return `<section class="card"><h2>Backup</h2><p class="small muted" style="margin:0">Your log is saved to your Claude account and syncs wherever you open this page, so there's nothing to back up here. To move it into the installed app, copy it below and paste it into the app's Restore.</p>
+      <button class="btn ghost" type="button" id="backup">Copy my log</button><div id="backup-out"></div></section>`;
+    const age = backupAge();
+    const nPhotos = Object.values(S.photos).filter((p) => !p.assetId).length;
+    return `<section class="card"><h2>Backup</h2>
+      <p class="small muted" style="margin:0">Your log lives on this phone. It survives updates and going offline, but deleting the app from your Home Screen, or a lost phone, takes it with it. Save a backup file to iCloud Drive every couple of weeks.</p>
+      <p class="small" style="margin:0;color:${age == null || age > 14 ? "var(--warn)" : "var(--good)"}">${ageText(age)}</p>
+      ${nPhotos ? `<label class="row small" style="gap:8px"><input type="checkbox" id="bk-photos" checked style="width:20px;height:20px;accent-color:var(--ink)"> Include ${nPhotos} progress photo${nPhotos > 1 ? "s" : ""} (bigger file)</label>` : ""}
+      <button class="btn wide" type="button" id="bk-save">Save backup file</button>
+      <label class="btn ghost wide file-btn">Restore from file<input type="file" id="bk-file" accept=".json,application/json"></label>
+      <div id="backup-out"></div>
+      <p class="small muted" style="margin:0">Restoring adds to what's here; anything with the same date or name is replaced by the backup's version. Your Claude API key is never included.</p></section>`;
+  }
+  async function saveFile(blob, name) {
+    const file = new File([blob], name, { type: "application/json" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Fuel Log backup" }); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
   }
   let lastCheckIn = null;
   function healthCard() {
@@ -1314,32 +1356,43 @@ weight: [Weight]</pre></li>
     const keep = $("#ci-keep"); if (keep) keep.onclick = () => { store.profile({ ...S.profile, kcal: S.profile.kcal || N.targets(S.profile, S.weights, S.days, today()).kcal, lastCheckIn: today() }); draft = null; render(); };
     const c = $("#coach"); if (c) c.onclick = runCoach;
     if (meSub !== "backup") return;
-    $("#backup").onclick = () => {
-      const text = JSON.stringify({ app: "fuel-log", v: 3, profile: S.profile, weights: S.weights, foods: S.foods, days: S.days, meals: S.meals, health: S.health, workouts: S.workouts, routines: S.routines, exercises: S.exercises, measures: S.measures });
-      const out = $("#backup-out");
-      const show = () => { out.innerHTML = `<textarea id="backup-text" rows="4" readonly></textarea>`; const ta = $("#backup-text"); ta.value = text; ta.select(); };
-      try { navigator.clipboard.writeText(text).then(() => { out.innerHTML = `<p class="small" style="margin:0;color:var(--good)">Copied ${Object.keys(S.days).length} days, ${Object.keys(S.weights).length} weigh-ins, ${Object.keys(S.foods).length} foods and ${Object.keys(S.workouts).length} workouts. Photos aren't included.</p>`; }, show); } catch (e) { show(); }
+    const out = (html) => { $("#backup-out").innerHTML = html; };
+    const cp = $("#backup");
+    if (cp) cp.onclick = () => {
+      const text = JSON.stringify(backupData());
+      const show = () => { out(`<textarea id="backup-text" rows="4" readonly></textarea>`); const ta = $("#backup-text"); ta.value = text; ta.select(); };
+      try { navigator.clipboard.writeText(text).then(() => out(`<p class="small" style="margin:0;color:var(--good)">Copied. In the installed app, go to Me → Backup and paste it into a .json file, or use Restore.</p>`), show); } catch (e) { show(); }
     };
-    $("#restore").onclick = () => {
-      const out = $("#backup-out");
-      out.innerHTML = `<textarea id="restore-text" rows="4" placeholder="Paste a backup here"></textarea><div class="row" style="margin-top:8px"><button class="btn small" type="button" id="restore-go">Restore</button><span class="small muted">Adds to what's here; same-day entries are replaced.</span></div>`;
-      $("#restore-go").onclick = () => {
-        try {
-          const b = JSON.parse($("#restore-text").value);
-          if (b.app !== "fuel-log") throw new Error();
-          if (b.profile) store.profile(b.profile);
-          for (const [d, kg] of Object.entries(b.weights || {})) store.weight(d, kg);
-          for (const f of Object.values(b.foods || {})) store.food(f);
-          for (const [d, day] of Object.entries(b.days || {})) store.day(d, day);
-          for (const m of Object.values(b.meals || {})) store.meal(m);
-          for (const [d, h] of Object.entries(b.health || {})) store.health(d, h);
-          for (const w of Object.values(b.workouts || {})) store.workout(w);
-          for (const r of Object.values(b.routines || {})) store.routine(r);
-          for (const x of Object.values(b.exercises || {})) store.exercise(x);
-          for (const [d, m] of Object.entries(b.measures || {})) store.measure(d, m);
-          render();
-        } catch (e) { out.insertAdjacentHTML("beforeend", `<p class="small" style="color:var(--warn)">That isn't a Fuel Log backup. Copy it again from the Backup section.</p>`); }
-      };
+    const sv = $("#bk-save");
+    if (sv) sv.onclick = async () => {
+      sv.disabled = true; sv.textContent = "Preparing…";
+      try {
+        const data = backupData();
+        if ($("#bk-photos") && $("#bk-photos").checked) data.photoData = await T.exportPhotos();
+        const name = `fuel-log-backup-${today()}.json`;
+        await saveFile(new Blob([JSON.stringify(data)], { type: "application/json" }), name);
+        try { localStorage.setItem(LAST_BACKUP, String(Date.now())); } catch (e) {}
+        render(); flash(`Backup saved as ${name}. Keep it in iCloud Drive or Files.`, "good");
+      } catch (e) {
+        sv.disabled = false; sv.textContent = "Save backup file";
+        if (!(e && e.name === "AbortError")) out(`<div class="status warn">Couldn't save the file. Try again, or choose Save to Files when the share sheet opens.</div>`);
+      }
+    };
+    const bf = $("#bk-file");
+    if (bf) bf.onchange = async () => {
+      const file = bf.files[0]; if (!file) return; bf.value = "";
+      try {
+        const b = JSON.parse(await file.text());
+        const when = b.saved ? new Date(b.saved).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "an earlier date";
+        out(`<div class="status">Backup from <strong>${when}</strong>: ${Object.keys(b.days || {}).length} days of food, ${Object.keys(b.workouts || {}).length} workouts, ${Object.keys(b.weights || {}).length} weigh-ins${b.photoData ? `, ${Object.keys(b.photoData).length} photos` : ""}.</div><button class="btn wide" type="button" id="bk-go">Restore</button>`);
+        $("#bk-go").onclick = async (ev) => {
+          ev.target.disabled = true;
+          try {
+            const r = await restoreData(b, true, (i, n) => { ev.target.textContent = `Restoring… ${i} of ${n}`; });
+            render(); flash(`Restored ${r.records} records${r.photos ? ` and ${r.photos} photos` : ""}.`, "good");
+          } catch (e) { out(`<div class="status warn">${esc((e && e.message) || "Couldn't restore that file.")}</div>`); }
+        };
+      } catch (e) { out(`<div class="status warn">That file isn't a Fuel Log backup.</div>`); }
     };
   };
 
