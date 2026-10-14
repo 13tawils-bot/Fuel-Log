@@ -1292,7 +1292,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     return { records: list.length, photos };
   }
   function backupCard() {
-    if (mode === "db") return `<section class="card"><h2>Backup</h2><p class="small muted" style="margin:0">Your log is saved to your Claude account and syncs wherever you open this page, so there's nothing to back up here. To move it into the installed app, copy it below and paste it into the app's Restore.</p>
+    if (mode === "db" || inClaude) return `<section class="card"><h2>Backup</h2><p class="small muted" style="margin:0">${mode === "db" ? "Your log is saved to your Claude account and syncs wherever you open this page, so there's nothing to back up here." : "Sign in to Claude to keep your log in your account."} To move it into the installed app, copy it below and save it as a .json file, then use Restore from file in the app.</p>
       <button class="btn ghost" type="button" id="backup">Copy my log</button><div id="backup-out"></div></section>`;
     const age = backupAge();
     const nPhotos = Object.values(S.photos).filter((p) => !p.assetId).length;
