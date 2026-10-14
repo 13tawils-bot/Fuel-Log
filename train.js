@@ -159,9 +159,9 @@
     window.addEventListener("pagehide", flush);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(); });
     const blankSet = (type = "n") => ({ type, kg: null, reps: null, sec: null, km: null, done: false });
-    function startWorkout({ name, exercises, routineId }) {
+    function startWorkout({ name, exercises, routineId, programme: prog }) {
       if (S.active) { flash("Finish or discard the workout in progress first."); app.go("train"); return; }
-      S.active = { id: "wk-" + app.uid(), name: name || defaultName(), start: Date.now(), routineId: routineId || null, exercises: exercises || [] };
+      S.active = { id: "wk-" + app.uid(), name: name || defaultName(), start: Date.now(), routineId: routineId || null, programme: prog || null, exercises: exercises || [] };
       saveActive(true); keepAwake(); app.go("train");
     }
     function defaultName() {
@@ -171,6 +171,22 @@
     const exFromRoutine = (re) => ({ exId: re.exId, rest: re.rest ?? 90, range: re.range || [8, 12], note: "", sets: Array.from({ length: re.sets || 1 }, () => blankSet()) });
     const restLabel = (sec) => (!sec ? "Off" : sec < 60 ? `${sec}s` : `${Math.floor(sec / 60)}min${sec % 60 ? " " + (sec % 60) + "s" : ""}`);
     const CHECK = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+    const TROPHY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0V4zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6M10 17h4"/></svg>`;
+    const prText = (p, type) => {
+      const set = p.set || p;
+      if (p.kind === "1RM") return `${wOut(p.e1rm || W.e1rm(set.kg, set.reps))} ${wu()} (from ${wOut(set.kg)} × ${set.reps})`;
+      if (p.kind === "volume") return `${wOut(set.kg)} ${wu()} × ${set.reps}`;
+      return fmtSet(set, type);
+    };
+    // PR toast: a short celebration the moment a set beats a record.
+    const toast = document.createElement("div");
+    toast.className = "pr-toast"; toast.hidden = true; toast.setAttribute("role", "status");
+    document.body.appendChild(toast);
+    function prToast(def, kinds, set) {
+      toast.innerHTML = `<span class="pr-ic">${TROPHY}</span><div><strong>New PR · ${esc(def.name)}</strong><span>${kinds.map((k) => W.PR_LABELS[k]).join(", ")}: ${esc(fmtSet(set, def.type))}</span></div>`;
+      toast.hidden = false; toast.classList.remove("go"); void toast.offsetWidth; toast.classList.add("go");
+      clearTimeout(prToast.t); prToast.t = setTimeout(() => (toast.hidden = true), 3200);
+    }
     const CLOCK = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9.5 2.5h5"/></svg>`;
 
     function targetFor(ex) {
@@ -202,7 +218,7 @@
           };
           const fields = t === "du" ? inp("sec", "numeric") : t === "cd" ? inp("km", "decimal") + inp("sec", "numeric") : inp("kg", "decimal") + inp("reps", "numeric");
           return `<tr class="${s.done ? "done" : ""}"><td><button type="button" class="stype st-${s.type}" data-stype="${i}:${j}" aria-label="Set ${label} options">${label}</button></td>
-            <td class="prev" data-prev="${i}:${j}">${p ? esc(fmtSet(p, t).replace(` ${wu()} × `, "×")) : "–"}${s.pr && s.pr.length ? ` <span class="prb">PR</span>` : ""}</td>${fields}
+            <td class="prev" data-prev="${i}:${j}">${p ? esc(fmtSet(p, t).replace(` ${wu()} × `, "×")) : "–"}${s.pr && s.pr.length ? ` <span class="prb" title="${esc(s.pr.map((k) => W.PR_LABELS[k]).join(", "))}">${TROPHY}PR</span>` : ""}</td>${fields}
             <td><button type="button" class="chk" data-done="${i}:${j}" aria-pressed="${s.done}" aria-label="Complete set ${j + 1}">${CHECK}</button></td></tr>`;
         }).join("");
         return `<section class="card ex-card">
@@ -211,6 +227,13 @@
           <button type="button" class="rest-btn" data-restset="${i}">${CLOCK}Rest timer: ${restLabel(ex.rest)}</button>
           ${tgt ? `<p class="hint">${tgt.up ? "↑ " : ""}${esc(lb() ? tgt.text.replace(/(\d+(?:\.\d+)?) kg/g, (_, k) => `${wOut(Number(k))} lb`) : tgt.text)}</p>` : ""}
           <table class="sets"><thead><tr><th style="width:36px">Set</th><th>Previous</th>${cols.map((c) => `<th style="width:22%">${c}</th>`).join("")}<th style="width:42px" aria-label="Done"></th></tr></thead><tbody>${rows}</tbody></table>
+          ${(() => {
+            if (!ex.sets.some((x) => x.done && x.type !== "w")) return "";
+            const c = W.compareToLast(def, ex.sets, S.workouts, a.start, true);
+            if (!c || c.pct == null) return "";
+            const fmt = (v) => (c.metric === "volume" ? fmtVol(v) : c.metric === "sec" ? secOut(v) : c.metric === "km" ? v.toFixed(2) + " km" : v + " reps");
+            return `<p class="vs ${c.pct > 0 ? "up" : c.pct < 0 ? "down" : ""}">${c.pct > 0 ? "▲" : c.pct < 0 ? "▼" : "="} ${fmt(c.now[c.metric])} vs ${fmt(c.prev[c.metric])} last time over ${c.now.sets} set${c.now.sets === 1 ? "" : "s"}${c.pct ? ` (${c.pct > 0 ? "+" : ""}${c.pct}%)` : ""}</p>`;
+          })()}
           <button class="add-set" type="button" data-addset="${i}">+ Add Set</button>
         </section>`;
       }).join("");
@@ -258,7 +281,7 @@
           if (!ok) { flash(def.type === "du" ? "Enter a time for this set." : def.type === "cd" ? "Enter a distance or time." : "Enter the reps for this set."); return; }
           s.done = true;
           s.pr = W.setPRs(s, def, S.workouts, S.active.start);
-          if (s.pr.length && navigator.vibrate) navigator.vibrate(80);
+          if (s.pr.length) { prToast(def, s.pr, s); if (navigator.vibrate) navigator.vibrate(80); }
           const nextIdx = ex.sets.findIndex((x, k) => k > j && !x.done);
           const label = nextIdx >= 0 ? `Next: ${def.name}, set ${nextIdx + 1}` : (S.active.exercises[i + 1] ? `Next: ${exDef(S.active.exercises[i + 1].exId).name}` : "Last set done. Finish when you're ready.");
           startRest(s.type === "w" ? Math.min(60, ex.rest || 0) : ex.rest, label);
@@ -328,7 +351,7 @@
     function finish() {
       const a = S.active;
       const w = {
-        id: a.id, name: a.name.trim() || defaultName(), start: a.start, end: Date.now(), date: app.iso(new Date(a.start)), routineId: a.routineId || null,
+        id: a.id, name: a.name.trim() || defaultName(), start: a.start, end: Date.now(), date: app.iso(new Date(a.start)), routineId: a.routineId || null, programme: a.programme || null,
         exercises: a.exercises.map((ex) => ({ exId: ex.exId, note: ex.note || "", range: ex.range, rest: ex.rest, sets: ex.sets.filter((s) => s.done).map(({ type, kg, reps, sec, km }) => ({ type, kg, reps, sec, km, done: true })) })).filter((ex) => ex.sets.length),
       };
       const sum = W.summary(w, exIndex(), S.workouts);
@@ -339,9 +362,12 @@
       const count = Object.keys(S.workouts).length;
       sheet(head("Workout saved") + `
         <div class="preview"><div><b>${fmtDur(sum.durationMin)}</b><span>time</span></div><div><b>${sum.sets}</b><span>sets</span></div><div><b style="font-size:1.1rem">${fmtVol(sum.volume)}</b><span>volume</span></div><div><b>${sum.prs.length}</b><span>PRs</span></div></div>
-        ${sum.prs.length ? `<div class="grid2" style="grid-template-columns:minmax(0,1fr);gap:6px">${sum.prs.map((p) => `<div class="pr-row"><span class="prb">PR</span> ${esc(p.exercise)}: ${{ weight: "heaviest weight", "1RM": "best estimated 1RM", reps: "most reps", time: "longest time", distance: "furthest distance" }[p.kind]}, ${esc(fmtSet(p.set, exDef(w.exercises.find((e) => exDef(e.exId).name === p.exercise)?.exId).type))}</div>`).join("")}</div>` : ""}
-        <p class="small muted" style="margin:0">Workout ${count}. ${w.routineId ? "" : "Save it as a routine to repeat it with one tap."}</p>
-        <div class="row">${w.routineId ? "" : `<button class="btn ghost" type="button" id="as-routine">Save as routine</button>`}<button class="btn" type="button" data-close style="flex:1">Done</button></div>`, (el) => {
+        ${sum.prs.length ? `<div class="pr-list">${Object.entries(sum.prs.reduce((g, p) => ((g[p.exercise] ||= []).push(p), g), {})).map(([name, list]) => `<div class="pr-row"><span class="pr-ic">${TROPHY}</span><div><strong>${esc(name)}</strong><span>${list.map((p) => W.PR_LABELS[p.kind]).join(", ")}: ${esc(fmtSet(list[list.length - 1].set, exDef(w.exercises.find((e) => exDef(e.exId).name === name)?.exId).type))}</span></div></div>`).join("")}</div>` : ""}
+        <div><h3 style="margin-bottom:6px">Vs last time</h3>${w.exercises.map((ex) => { const def = exDef(ex.exId); const c = W.compareToLast(def, ex.sets, S.workouts, w.start);
+          const fmt = (v, m) => (m === "volume" ? fmtVol(v) : m === "sec" ? secOut(v) : m === "km" ? v.toFixed(2) + " km" : v + " reps");
+          return `<div class="row spread small" style="padding:4px 0;flex-wrap:nowrap"><span style="min-width:0">${esc(def.name)}</span><span class="num ${c && c.pct > 0 ? "up" : c && c.pct < 0 ? "down" : "muted"}" style="white-space:nowrap">${!c ? "First time" : c.pct == null ? "–" : `${c.pct > 0 ? "▲ +" : c.pct < 0 ? "▼ " : "= "}${c.pct}% · ${fmt(c.now[c.metric], c.metric)}`}</span></div>`; }).join("")}</div>
+        <p class="small muted" style="margin:0">Workout ${count}. ${w.routineId || w.programme ? "" : "Save it as a routine to repeat it with one tap."}</p>
+        <div class="row">${w.routineId || w.programme ? "" : `<button class="btn ghost" type="button" id="as-routine">Save as routine</button>`}<button class="btn" type="button" data-close style="flex:1">Done</button></div>`, (el) => {
         const r = el.querySelector("#as-routine");
         if (r) r.onclick = () => { routineFromWorkout(w); app.closeSheet(); flash(`Saved "${w.name}" as a routine.`, "good"); app.render(); };
       });
@@ -438,6 +464,114 @@
       app.sheet("", draw);
     }
 
+    // ---------- Ready-made programmes ----------
+    // [exercise id, sets, [low, high] reps, rest seconds]
+    const PROGRAMMES = {
+      fb3: {
+        name: "Full body, 3 days a week", who: "Best start if you're newish or busy. Every muscle twice a week in about 50 minutes.",
+        sessions: [
+          { name: "Full Body A", ex: [["x-squat-barbell", 3, [5, 8], 180], ["x-bench-press-barbell", 3, [6, 10], 150], ["x-seated-cable-row-cable", 3, [8, 12], 90], ["x-romanian-deadlift-dumbbell", 2, [8, 12], 90], ["x-lateral-raise-dumbbell", 2, [12, 15], 60], ["x-plank", 2, [1, 1], 60]] },
+          { name: "Full Body B", ex: [["x-deadlift-trap-bar", 3, [5, 8], 180], ["x-overhead-press-dumbbell", 3, [8, 12], 120], ["x-lat-pulldown-cable", 3, [8, 12], 90], ["x-leg-press-machine", 3, [10, 15], 90], ["x-bicep-curl-dumbbell", 2, [10, 15], 60], ["x-triceps-pushdown-cable", 2, [10, 15], 60]] },
+        ],
+      },
+      ul4: {
+        name: "Upper / lower, 4 days a week", who: "When three days feels easy. More volume per muscle, about an hour a session.",
+        sessions: [
+          { name: "Upper A", ex: [["x-bench-press-barbell", 3, [6, 10], 150], ["x-bent-over-row-barbell", 3, [6, 10], 120], ["x-overhead-press-dumbbell", 3, [8, 12], 90], ["x-lat-pulldown-cable", 3, [8, 12], 90], ["x-lateral-raise-dumbbell", 3, [12, 15], 60], ["x-bicep-curl-dumbbell", 2, [10, 15], 60], ["x-rope-pushdown-cable", 2, [10, 15], 60]] },
+          { name: "Lower A", ex: [["x-squat-barbell", 3, [5, 8], 180], ["x-romanian-deadlift-barbell", 3, [8, 10], 120], ["x-leg-press-machine", 3, [10, 15], 90], ["x-seated-leg-curl-machine", 3, [10, 15], 60], ["x-standing-calf-raise-machine", 3, [10, 15], 60], ["x-hanging-knee-raise", 2, [8, 15], 60]] },
+          { name: "Upper B", ex: [["x-incline-bench-press-dumbbell", 3, [8, 12], 120], ["x-chest-supported-row-dumbbell", 3, [8, 12], 90], ["x-pull-up-assisted", 3, [6, 10], 120], ["x-arnold-press-dumbbell", 2, [8, 12], 90], ["x-face-pull-cable", 3, [12, 15], 60], ["x-hammer-curl-dumbbell", 2, [10, 15], 60], ["x-overhead-triceps-extension-cable", 2, [10, 15], 60]] },
+          { name: "Lower B", ex: [["x-deadlift-trap-bar", 3, [5, 8], 180], ["x-bulgarian-split-squat-dumbbell", 3, [8, 12], 90], ["x-hip-thrust-barbell", 3, [8, 12], 90], ["x-leg-extension-machine", 3, [12, 15], 60], ["x-lying-leg-curl-machine", 2, [10, 15], 60], ["x-seated-calf-raise-machine", 3, [10, 15], 60]] },
+        ],
+      },
+    };
+    const programme = () => (S.profile && S.profile.programme && PROGRAMMES[S.profile.programme.id] ? S.profile.programme : null);
+    // The next session follows the last one you did, so a missed day just shifts the plan.
+    function nextSession() {
+      const p = programme(); if (!p) return null;
+      const def = PROGRAMMES[p.id];
+      const last = Object.values(S.workouts).filter((w) => w.programme && w.programme.id === p.id).sort((a, b) => b.start - a.start)[0];
+      const idx = last ? (last.programme.idx + 1) % def.sessions.length : 0;
+      return { def, idx, session: def.sessions[idx], lastDate: last ? last.date : null };
+    }
+    function startProgramme(short) {
+      const n = nextSession(); if (!n) return;
+      const list = short ? n.session.ex.slice(0, 4) : n.session.ex;
+      startWorkout({
+        name: n.session.name + (short ? " (short)" : ""), programme: { id: programme().id, idx: n.idx },
+        exercises: list.map(([exId, sets, range, rest]) => exFromRoutine({ exId, sets: short ? 2 : sets, range, rest: short ? Math.min(rest, 90) : rest })),
+      });
+    }
+    function programmeCard() {
+      const p = programme();
+      if (!p) {
+        if (S.profile && S.profile.programme === false) return "";
+        return `<section class="card"><h2>Pick a programme</h2>
+          <p class="small muted" style="margin:0">A ready-made plan that tells you what to do each session and adds weight for you as you get stronger. No planning needed.</p>
+          ${Object.entries(PROGRAMMES).map(([id, d]) => `<button type="button" class="choice" data-prog="${id}"><strong>${esc(d.name)}</strong><span>${esc(d.who)}</span></button>`).join("")}
+          <button class="link" type="button" id="prog-skip" style="justify-self:start">I'll use my own routines</button></section>`;
+      }
+      const n = nextSession();
+      const mins = n.session.ex.reduce((a, [, sets, , restSec]) => a + sets * (restSec + 45), 0) / 60;
+      return `<section class="card">
+        <div class="row spread"><span class="small muted">${esc(n.def.name)}</span><button class="link small" type="button" id="prog-change">Change</button></div>
+        <div><h2 style="font-size:1.45rem">Next: ${esc(n.session.name)}</h2><p class="small muted" style="margin:2px 0 0">${n.session.ex.length} exercises · about ${Math.round(mins / 5) * 5} min${n.lastDate ? ` · last session ${fmtDate(n.lastDate, { weekday: "long" })}` : ""}</p></div>
+        <div class="small">${n.session.ex.map(([id, sets, range]) => `<div class="row spread" style="padding:3px 0"><span>${esc(exDef(id).name)}</span><span class="muted num">${sets} × ${range[0] === range[1] ? "max" : range.join("–")}</span></div>`).join("")}</div>
+        <button class="btn wide" type="button" id="prog-start">Start ${esc(n.session.name)}</button>
+        <button class="btn ghost wide" type="button" id="prog-short">Short on time · 30 min version</button>
+      </section>`;
+    }
+    function bindProgramme() {
+      document.querySelectorAll("[data-prog]").forEach((b) => (b.onclick = () => { store.profile({ ...S.profile, programme: { id: b.dataset.prog, started: app.today() } }); app.render(); }));
+      const sk = $("#prog-skip"); if (sk) sk.onclick = () => { store.profile({ ...S.profile, programme: false }); app.render(); };
+      const ch = $("#prog-change"); if (ch) ch.onclick = () => { store.profile({ ...S.profile, programme: null }); app.render(); };
+      const st = $("#prog-start"); if (st) st.onclick = () => startProgramme(false);
+      const sh2 = $("#prog-short"); if (sh2) sh2.onclick = () => startProgramme(true);
+    }
+
+    // ---------- Gym calendar ----------
+    let calMonth = null; // [year, month]
+    const timeOf = (ms) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    function calendarCard() {
+      const now = new Date();
+      calMonth = calMonth || [now.getFullYear(), now.getMonth()];
+      const [y, m] = calMonth;
+      const cal = W.calendarMonth(S.workouts, y, m);
+      const first = new Date(y, m, 1), daysIn = new Date(y, m + 1, 0).getDate(), lead = (first.getDay() + 6) % 7;
+      const isThisMonth = y === now.getFullYear() && m === now.getMonth();
+      const cells = [];
+      for (let i = 0; i < lead; i++) cells.push(`<span></span>`);
+      for (let d = 1; d <= daysIn; d++) {
+        const ws = cal.days[d], isToday = isThisMonth && d === now.getDate();
+        const future = new Date(y, m, d) > now;
+        cells.push(ws ? `<button type="button" class="cd gym ${isToday ? "today" : ""}" data-calday="${d}" aria-label="${d}: ${ws.length} workout${ws.length > 1 ? "s" : ""}">${d}</button>`
+          : `<span class="cd ${isToday ? "today" : ""} ${future ? "future" : ""}">${d}</span>`);
+      }
+      const label = first.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+      return `<section class="card">
+        <div class="row spread"><button class="cal-nav" type="button" data-calmove="-1" aria-label="Previous month">‹</button><h2 style="flex:1;text-align:center">${label}</h2><button class="cal-nav" type="button" data-calmove="1" aria-label="Next month" ${isThisMonth ? "disabled" : ""}>›</button></div>
+        <div class="cal"><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b>${cells.join("")}</div>
+        <div class="cal-stats"><div><b>${cal.gymDays}</b><span>gym days</span></div><div><b>${fmtDur(cal.totalMin)}</b><span>total time</span></div><div><b>${cal.sessions ? fmtDur(cal.avgMin) : "–"}</b><span>avg session</span></div></div>
+      </section>`;
+    }
+    function bindCalendar() {
+      document.querySelectorAll("[data-calmove]").forEach((b) => (b.onclick = () => {
+        let [y, m] = calMonth; m += Number(b.dataset.calmove);
+        if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
+        calMonth = [y, m]; app.render();
+      }));
+      document.querySelectorAll("[data-calday]").forEach((b) => (b.onclick = () => {
+        const [y, m] = calMonth, d = Number(b.dataset.calday);
+        const ws = W.calendarMonth(S.workouts, y, m).days[d].sort((a, c) => a.start - c.start);
+        const idx = exIndex();
+        sheet(head(new Date(y, m, d).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })) + ws.map((w) => {
+          const s2 = W.summary(w, idx, S.workouts);
+          return `<button type="button" class="result" data-wkopen="${esc(w.id)}"><span><span>${esc(w.name)}</span><br><span class="small muted">${timeOf(w.start)}–${timeOf(w.end || w.start)} · ${fmtDur(s2.durationMin)} · ${s2.sets} sets</span></span><span class="small" style="text-align:right"><span class="num">${fmtVol(s2.volume)}</span>${s2.prs.length ? `<br><span class="prb">${TROPHY}${s2.prs.length} PR</span>` : ""}</span></button>`;
+        }).join(""), (el) => {
+          el.querySelectorAll("[data-wkopen]").forEach((x) => (x.onclick = () => workoutDetail(S.workouts[x.dataset.wkopen])));
+        });
+      }));
+    }
+
     // ---------- Train home ----------
     let sub = { kind: "home" }, chartMetric = "e1rm";
     function homeView() {
@@ -462,9 +596,12 @@
         return { def, shown, chg, sessions: ser.length, label: metric === "e1rm" ? "est. 1RM" : metric === "reps" ? "best set" : "best" };
       });
       return `<div class="app" style="gap:14px">
+        ${programmeCard()}
+        ${calendarCard()}
         <section class="card">
-          <div class="row spread"><h2>Train</h2><span class="small muted">${thisWeek} workout${thisWeek === 1 ? "" : "s"} this week</span></div>
-          <button class="btn wide" type="button" id="tr-empty">+ Start Empty Workout</button>
+          <div class="row spread"><h2>Quick start</h2><span class="small muted">${thisWeek} workout${thisWeek === 1 ? "" : "s"} this week</span></div>
+          <button class="btn ${programme() ? "ghost " : ""}wide" type="button" id="tr-empty">+ Start Empty Workout</button>
+          ${S.profile && S.profile.programme === false ? `<button class="link small" type="button" id="prog-show" style="justify-self:start">Try a ready-made programme</button>` : ""}
         </section>
         <section class="card">
           <div class="row spread"><h2>Routines</h2><button class="btn ghost small" type="button" id="rt-new">New routine</button></div>
@@ -472,6 +609,22 @@
             <button class="btn ghost small" type="button" data-rtedit="${esc(r.id)}">Edit</button><button class="btn small" type="button" data-rtstart="${esc(r.id)}">Start</button></div>`).join("")
             : `<p class="empty">Routines are workouts you repeat, like Push, Pull and Legs. Build one here, or save a finished workout as a routine.</p>`}
         </section>
+        ${(() => {
+          const o = W.overloadScore(S.workouts, idx);
+          // One line per lift per workout, listing every record that set beat.
+          const groups = [];
+          for (const p of W.recentPRs(S.workouts, idx, 60)) {
+            const g = groups.find((x) => x.exId === p.exId && x.workoutId === p.workoutId);
+            if (g) g.labels.push(p.label); else groups.push({ ...p, labels: [p.label] });
+          }
+          const recent = groups.slice(0, 6);
+          if (!recent.length && o.total === 0) return "";
+          return `<section class="card">
+            <div class="row spread"><h2>Progress & PRs</h2><span class="small muted">last 4 weeks</span></div>
+            ${o.total ? `<div class="overload"><div class="ov-ring" style="--p:${o.pct}"><b>${o.pct}%</b></div><div><strong>Progressive overload</strong><span>${o.improved} of ${o.total} exercises beat the previous session: more weight, more reps or more volume. Aim for over half.</span></div></div>` : ""}
+            ${recent.length ? `<h3 style="margin-top:4px">Recent PRs</h3>` : ""}
+            ${recent.map((p) => `<button type="button" class="pr-row result" data-exinfo="${esc(p.exId)}"><span class="pr-ic">${TROPHY}</span><div><strong>${esc(exDef(p.exId).name)}</strong><span>${esc(fmtSet(p.set, exDef(p.exId).type))} · ${p.labels.join(", ")} · ${fmtDate(p.date, { day: "numeric", month: "short" })}</span></div></button>`).join("")}
+          </section>`; })()}
         <section class="card">
           <div class="row spread"><h2>Strength</h2><button class="btn ghost small" type="button" id="ex-find">Find exercise</button></div>
           ${top.length ? top.map((x) => `<button type="button" class="result" data-exinfo="${esc(x.def.id)}"><span><span>${esc(x.def.name)}</span><br><span class="small muted">${x.sessions} session${x.sessions > 1 ? "s" : ""} · ${x.label}</span></span>
@@ -486,7 +639,7 @@
         </section>
         <section class="card">
           <h2>History</h2>
-          ${workouts.length ? workouts.slice(0, 15).map((w) => { const s = W.summary(w, idx, S.workouts); return `<button type="button" class="result" data-wk="${esc(w.id)}"><span><span>${esc(w.name)}</span><br><span class="small muted">${fmtDate(w.date)} · ${fmtDur(s.durationMin)} · ${s.sets} sets</span></span><span class="small" style="text-align:right"><span class="num">${fmtVol(s.volume)}</span>${s.prs.length ? `<br><span class="prb">${s.prs.length} PR</span>` : ""}</span></button>`; }).join("")
+          ${workouts.length ? workouts.slice(0, 15).map((w) => { const s = W.summary(w, idx, S.workouts); return `<button type="button" class="result" data-wk="${esc(w.id)}"><span><span>${esc(w.name)}</span><br><span class="small muted">${fmtDate(w.date)}, ${timeOf(w.start)} · ${fmtDur(s.durationMin)} · ${s.sets} sets</span></span><span class="small" style="text-align:right"><span class="num">${fmtVol(s.volume)}</span>${s.prs.length ? `<br><span class="prb">${s.prs.length} PR</span>` : ""}</span></button>`; }).join("")
             : `<p class="empty">Finished workouts appear here.</p>`}
         </section>
       </div>`;
@@ -494,6 +647,8 @@
     function bindHome() {
       const v = $("#view");
       $("#tr-empty").onclick = () => startWorkout({});
+      bindProgramme(); bindCalendar();
+      const ps = $("#prog-show"); if (ps) ps.onclick = () => { store.profile({ ...S.profile, programme: null }); app.render(); };
       $("#rt-new").onclick = () => routineEditor(null);
       $("#ex-find").onclick = () => picker((ids) => openExercise(ids[0]), { single: true });
       v.querySelectorAll("[data-rtedit]").forEach((b) => (b.onclick = () => routineEditor(S.routines[b.dataset.rtedit])));
@@ -541,6 +696,10 @@
           <div class="chart-wrap">${lineChart(pts, isW ? wu() : chartMetric === "sec" ? "s" : chartMetric === "km" ? "km" : "reps", chartMetric === "sec")}</div>
           ${def.type === "wr" ? `<p class="small muted" style="margin:0">Estimated 1RM uses the Epley formula on your best working set each session, so you can see strength rising without testing a true max.</p>` : ""}
         </section>
+        ${(() => { const prs = W.prHistory(def, S.workouts).reverse();
+          return `<section class="card"><div class="row spread"><h2>Personal records</h2><span class="small muted">${prs.length} PR${prs.length === 1 ? "" : "s"}</span></div>
+            ${prs.length ? prs.slice(0, 12).map((p) => `<div class="pr-row"><span class="pr-ic">${TROPHY}</span><div><strong>${p.label}</strong><span>${esc(prText(p, def.type))} · ${fmtDate(p.date, { day: "numeric", month: "short", year: "numeric" })}</span></div></div>`).join("")
+              : `<p class="empty" style="margin:0">Your first session sets the baseline. Beat it next time and the PR shows up here.</p>`}</section>`; })()}
         <section class="card"><h3>History</h3>${hist.length ? hist.map((h) => `<div class="entry" style="grid-template-columns:minmax(0,1fr) auto"><span>${fmtDate(h.date)}</span><span class="num small" style="text-align:right">${h.sets.map((st) => esc(fmtSet(st, def.type))).join("<br>")}</span></div>`).join("") : `<p class="empty">You haven't done this exercise yet.</p>`}</section>
         <button class="btn wide" type="button" id="ex-start">${S.active ? "Add to current workout" : "Start a workout with this"}</button>
       </div>`;
@@ -712,6 +871,7 @@
       photosCard, bindPhotos,
       weekCount() { const w = W.weeklyCounts(S.workouts); return w[w.length - 1]; },
       reset() { sub = { kind: "home" }; },
+      exIndex,
     };
   };
 })();

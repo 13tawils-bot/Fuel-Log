@@ -109,6 +109,26 @@ label.field > span { font-weight: 500; }
 .pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--chalk); color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .empty { color: var(--muted); font-size: 14px; }
 
+/* Won the day */
+.wins { gap: 12px; }
+.win-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.win { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: center; background: var(--chalk); border-radius: 12px; padding: 10px; }
+.win b { display: block; font-size: 14px; }
+.win span { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.win-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; }
+.win.on { background: var(--good-soft); }
+.win.on .win-dot { background: var(--good); border-color: var(--good); }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.wd { display: grid; justify-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.wd i { width: 26px; height: 26px; border-radius: 50%; background: var(--chalk); display: block; }
+.wd.great i { background: var(--good); }
+.wd.good i { background: color-mix(in srgb, var(--good) 45%, var(--chalk)); }
+.wd.miss i { background: color-mix(in srgb, var(--danger) 35%, var(--chalk)); }
+.wd.future i { background: transparent; border: 2px dashed var(--line); }
+.wd.today i { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary); }
+.wd.today span { color: var(--primary); font-weight: 700; }
+@media (max-width: 370px) { .win { grid-template-columns: minmax(0, 1fr); justify-items: start; } }
+
 /* Body */
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .stat { display: grid; gap: 2px; }
@@ -207,7 +227,39 @@ tr.done .stype { background: transparent; }
 .chk[aria-pressed="true"] { background: var(--good); color: #fff; }
 .add-set { width: 100%; border: 0; background: var(--chalk); border-radius: 10px; padding: 10px; font-weight: 600; font-size: 15px; color: var(--ink); }
 .prb { display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; color: #fff; background: var(--fat); border-radius: 5px; padding: 1px 5px; vertical-align: 1px; }
-.pr-row { font-size: 14px; }
+.prb { display: inline-flex; align-items: center; gap: 2px; }
+.prb svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pr-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 0; text-align: left; font-size: 14px; }
+.pr-row strong { display: block; font-size: 14.5px; }
+.pr-row span { color: var(--muted); font-size: 13px; }
+.pr-ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--fat) 18%, var(--card)); color: var(--fat); }
+.pr-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pr-list { display: grid; gap: 2px; }
+.pr-toast { position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(520px, calc(100% - 24px)); z-index: 25; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; background: var(--card); border-radius: 16px; padding: 12px 14px; box-shadow: 0 10px 34px rgba(0,0,0,0.25); }
+.pr-toast strong { display: block; font-size: 15px; }
+.pr-toast span { font-size: 13px; color: var(--muted); }
+.pr-toast.go { animation: prtoast 3.2s ease forwards; }
+@keyframes prtoast { 0% { opacity: 0; transform: translate(-50%, -16px); } 8%, 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -16px); } }
+.vs { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vs.up, .up { color: var(--good); } .vs.down, .down { color: var(--warn); }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px 0; justify-items: center; text-align: center; }
+.cal b { font-size: 11.5px; color: var(--muted); font-weight: 600; padding-bottom: 2px; }
+.cd { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 15px; font-variant-numeric: tabular-nums; border: 0; background: none; color: var(--ink); padding: 0; }
+.cd.future { color: var(--muted); opacity: 0.5; }
+.cd.gym { background: var(--primary); color: var(--primary-ink); font-weight: 700; }
+.cd.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.cd.gym.today { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary); }
+.cal-nav { width: 36px; height: 32px; border: 0; border-radius: 10px; background: var(--chalk); color: var(--primary); font-size: 18px; }
+.cal-nav:disabled { opacity: 0.3; }
+.cal-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; text-align: center; border-top: 1px solid var(--line); padding-top: 12px; }
+.cal-stats b { display: block; font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.cal-stats span { font-size: 12px; color: var(--muted); }
+.overload { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: center; }
+.overload strong { display: block; }
+.overload span { font-size: 13px; color: var(--muted); }
+.ov-ring { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--good) calc(var(--p) * 1%), var(--chalk) 0); position: relative; }
+.ov-ring::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--card); }
+.ov-ring b { position: relative; font-size: 15px; font-variant-numeric: tabular-nums; }
 .restbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(62px + env(safe-area-inset-bottom, 0px)); width: min(536px, calc(100% - 16px)); display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 6px; background: var(--card); color: var(--ink); padding: 8px 8px 12px 14px; border-radius: 16px; z-index: 6; box-shadow: 0 6px 28px rgba(0,0,0,0.22); overflow: hidden; }
 .restbar .rb-main { background: none; border: 0; padding: 0; text-align: left; display: flex; align-items: baseline; gap: 8px; color: inherit; }
 .restbar .rb-label { font-size: 13px; font-weight: 600; color: var(--muted); }
@@ -293,7 +345,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
 
   // ---------- State and storage ----------
   // Saved to your Claude account when this runs as a Claude artifact, otherwise to this browser.
-  const S = { profile: null, weights: {}, foods: {}, days: {}, meals: {}, health: {}, workouts: {}, routines: {}, exercises: {}, photos: {}, active: null };
+  const S = { profile: null, weights: {}, foods: {}, days: {}, meals: {}, health: {}, workouts: {}, routines: {}, exercises: {}, photos: {}, measures: {}, active: null };
   const COMMON = window.COMMON_FOODS || [];
   const inClaude = !!(window.claude && window.claude.use);
   // The demo page loads example data and never touches your real log.
@@ -309,7 +361,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
   function loadLocal() {
     if (DEMO) { Object.assign(S, JSON.parse(JSON.stringify(DEMO))); return; }
     try { Object.assign(S, JSON.parse(localStorage.getItem(LOCAL) || "{}")); } catch (e) {}
-    for (const k of ["meals", "health", "workouts", "routines", "exercises", "photos"]) S[k] = S[k] || {};
+    for (const k of ["meals", "health", "workouts", "routines", "exercises", "photos", "measures"]) S[k] = S[k] || {};
     // The workout in progress is also kept on its own, so a crash or reload never loses sets.
     try { const a = JSON.parse(localStorage.getItem(LOCAL + "-active") || "null"); if (a) S.active = a; } catch (e) {}
   }
@@ -346,6 +398,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     dropRoutine(id) { delete S.routines[id]; if (mode === "db") write(refs.routines.doc(id), null); else saveLocal(); },
     exercise(e) { S.exercises[e.id] = e; if (mode === "db") write(refs.exercises.doc(e.id), e); else saveLocal(); },
     photo(p) { S.photos[p.id] = p; if (mode === "db") write(refs.photos.doc(p.id), p); else saveLocal(); },
+    measure(date, m) { if (m) S.measures[date] = m; else delete S.measures[date]; if (mode === "db") write(refs.measures.doc(date), m ? { date, ...m } : null); else saveLocal(); },
     dropPhoto(id) { delete S.photos[id]; if (mode === "db") write(refs.photos.doc(id), null); else saveLocal(); },
     active(a) {
       S.active = a;
@@ -367,12 +420,12 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     if (db && id) {
       const base = db.doc("data/users/" + id + "/profile");
       refs = { profile: base, weights: base.collection("weights"), foods: base.collection("foods"), days: base.collection("days"), meals: base.collection("meals"), health: base.collection("health"),
-        workouts: base.collection("workouts"), routines: base.collection("routines"), exercises: base.collection("exercises"), photos: base.collection("photos"), active: base.collection("state").doc("active") };
+        workouts: base.collection("workouts"), routines: base.collection("routines"), exercises: base.collection("exercises"), photos: base.collection("photos"), measures: base.collection("measures"), active: base.collection("state").doc("active") };
       mode = "db";
       const localActive = S.active;
-      S.profile = null; S.weights = {}; S.foods = {}; S.days = {}; S.meals = {}; S.health = {}; S.workouts = {}; S.routines = {}; S.exercises = {}; S.photos = {};
+      S.profile = null; S.weights = {}; S.foods = {}; S.days = {}; S.meals = {}; S.health = {}; S.workouts = {}; S.routines = {}; S.exercises = {}; S.photos = {}; S.measures = {};
       const ready = new Set();
-      const got = (k) => { ready.add(k); if (ready.size >= 11) { booting = false; render(); } };
+      const got = (k) => { ready.add(k); if (ready.size >= 12) { booting = false; render(); } };
       const fail = (e) => { if (e && e.code !== "unavailable") flash("Lost connection to your saved data. Reload to reconnect."); };
       base.onSnapshot((s) => { S.profile = s.exists ? s.data() : null; got("p"); }, fail);
       refs.weights.onSnapshot((q) => { S.weights = Object.fromEntries(q.docs.map((d) => [d.id, d.data().kg])); got("w"); }, fail);
@@ -383,6 +436,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
       refs.workouts.orderBy("start", "desc").limit(400).onSnapshot((q) => { S.workouts = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("wo"); }, fail);
       refs.routines.onSnapshot((q) => { S.routines = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ro"); }, fail);
       refs.exercises.onSnapshot((q) => { S.exercises = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ex"); }, fail);
+      refs.measures.onSnapshot((q) => { S.measures = Object.fromEntries(q.docs.map((d) => { const { date, ...m } = d.data(); return [d.id, m]; })); got("ms"); }, fail);
       refs.photos.onSnapshot((q) => { S.photos = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ph"); }, fail);
       // The workout in progress is read once; this device's copy wins if it's newer.
       refs.active.get().then((d) => { const remote = d.exists ? d.data().workout : null; S.active = localActive && (!remote || localActive.start >= remote.start) ? localActive : remote; }, () => { S.active = localActive; }).then(() => got("ac"));
@@ -430,7 +484,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     const banner = (DEMO ? `<div class="status" role="note">This is a demo filled with four weeks of example data. Tap around freely; nothing is saved, and reloading resets it.</div>` : "") + (tab !== "train" ? T.banner() : "");
     if (tab === "today") v.innerHTML = banner + todayView(t);
     else if (tab === "train") v.innerHTML = (DEMO ? banner : "") + T.view();
-    else if (tab === "body") v.innerHTML = banner + weightView(t).replace(/<\/div>\s*$/, T.photosCard() + "</div>");
+    else if (tab === "body") v.innerHTML = banner + recompCard() + weightView(t).replace(/<\/div>\s*$/, T.photosCard() + "</div>");
     else if (tab === "foods") v.innerHTML = banner + foodsView();
     else v.innerHTML = banner + planView(t);
     bind[tab] && bind[tab](t);
@@ -553,6 +607,7 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     return `<div class="app" style="gap:14px">
       ${due ? `<button class="banner" type="button" id="ci-go"><span><strong>Weekly check-in</strong><br><span class="small">See how the week went and adjust targets</span></span><span aria-hidden="true">›</span></button>` : ""}
       <div class="daynav"><button type="button" id="prev" aria-label="Previous day">‹</button><h2>${label}</h2><button type="button" id="next" aria-label="Next day" ${isToday ? "disabled" : ""}>›</button></div>
+      ${winsCard(t, isToday)}
       <section class="card">
         <div class="row spread" style="align-items:flex-end">
           <div class="left"><span class="big ${left < 0 ? "over" : ""}">${Math.abs(left)}</span><span class="muted">kcal ${left < 0 ? "over" : "left"} of ${t.kcal}</span></div>
@@ -572,6 +627,29 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     </div>`;
   }
   let lastSuggestions = [], lastPlans = [], planOpen = false, savingMeal = null;
+  const stepGoal = () => (S.profile && S.profile.stepGoal) || 8000;
+  function winsFor(d, t) {
+    return N.dayWins({ day: S.days[d], target: t, goal: S.profile.goal, trained: Object.values(S.workouts).some((w) => w.date === d) || (d === today() && !!S.active),
+      steps: S.health[d] ? S.health[d].steps : null, stepGoal: stepGoal() });
+  }
+  function winsCard(t, isToday) {
+    const w = winsFor(viewDate, t) || { protein: false, calories: false, moved: false, score: 0 };
+    const tot = N.totals(S.days[viewDate]?.entries);
+    const steps = S.health[viewDate]?.steps;
+    const trained = Object.values(S.workouts).some((x) => x.date === viewDate);
+    const st = N.weekStreak((d) => winsFor(d, t), today());
+    const chip = (ok, label, sub) => `<div class="win ${ok ? "on" : ""}"><span class="win-dot" aria-hidden="true">${ok ? "✓" : ""}</span><div><b>${label}</b><span>${sub}</span></div></div>`;
+    const DAYS = ["M", "T", "W", "T", "F", "S", "S"];
+    const dots = st.week.map((d, i) => { const r = d.wins; const cls = d.future ? "future" : !r ? "none" : r.score === 3 ? "great" : r.good ? "good" : "miss";
+      return `<div class="wd ${cls} ${d.date === today() ? "today" : ""}" title="${d.date}"><i></i><span>${DAYS[i]}</span></div>`; }).join("");
+    const head = w.score === 3 ? "Day won" : w.score === 2 ? "Good day" : isToday ? "Win today" : "Missed";
+    return `<section class="card wins">
+      <div class="row spread"><h2>${head}</h2><span class="small muted">${st.streak ? `Streak: ${st.streak} week${st.streak > 1 ? "s" : ""}` : `${st.goodThisWeek} of ${st.need} good days this week`}</span></div>
+      <div class="win-row">${chip(w.protein, "Protein", `${Math.round(tot.p)} / ${t.p}g`)}${chip(w.moved, "Moved", trained ? "Workout done" : `${steps != null ? steps.toLocaleString("en-GB") : 0} / ${stepGoal().toLocaleString("en-GB")} steps`)}${chip(w.calories, "Calories", `${tot.kcal} / ${t.kcal}`)}</div>
+      <div class="week">${dots}</div>
+      <p class="small muted" style="margin:0">Hit 2 of 3 for a good day. 5 good days a week keeps your streak going, so a couple of off days never break it.</p>
+    </section>`;
+  }
   const bind = {};
   bind.today = () => {
     $("#prev").onclick = () => { viewDate = N.addDays(viewDate, -1); render(); };
@@ -636,6 +714,34 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
     render();
   }
 
+  // ---------- Recomp scorecard ----------
+  function recompCard() {
+    const since = Date.now() - 35 * 86400000;
+    const strength = window.Workouts.strengthTrend(S.workouts, T.exIndex(), since);
+    const r = N.recomp({ weights: S.weights, measures: S.measures, strength, goal: S.profile.goal, today: today() });
+    const dates = Object.keys(S.measures).sort();
+    const last = dates.length ? S.measures[dates[dates.length - 1]] : null;
+    const bf = last && last.neck ? N.navyBodyFat(S.profile.sex, S.profile.heightCm, last.waist, last.neck) : null;
+    const sign = (v, u, d = 1) => (v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(d) + u);
+    const icon = { good: "✓", warn: "!", info: "i" }[r.kind];
+    const due = !dates.length || N.daysBetween(dates[dates.length - 1], today()) >= 6;
+    return `<section class="card">
+      <div class="row spread"><h2>Recomp scorecard</h2><span class="small muted">last 4 weeks</span></div>
+      <div class="insight"><span class="ic ${r.kind}" aria-hidden="true">${icon}</span><div><strong>${esc(r.verdict)}</strong><div class="small muted" style="margin-top:2px">${esc(r.detail)}</div></div></div>
+      <div class="stats">
+        <div class="stat"><span class="k">Waist</span><span class="v">${sign(r.waistChange, "")}</span><span class="s">${r.waistChange == null ? "needs 2 measures" : "cm"}</span></div>
+        <div class="stat"><span class="k">Strength</span><span class="v">${sign(r.strengthPct, "%", 0)}</span><span class="s">${r.lifts ? `est. 1RM, ${r.lifts} lift${r.lifts > 1 ? "s" : ""}` : "needs workouts"}</span></div>
+        <div class="stat"><span class="k">Weight</span><span class="v">${r.weightChange == null ? "–" : sign(unit() === "lb" ? r.weightChange * 2.20462 : r.weightChange, "")}</span><span class="s">${unit()} trend</span></div>
+      </div>
+      <form class="row" id="waist-form" style="align-items:end;flex-wrap:nowrap">
+        <label class="field" style="flex:1"><span>Waist (cm)${due ? " · due" : ""}</span><input id="waist-in" type="number" step="0.1" inputmode="decimal" placeholder="${last ? last.waist : "e.g. 86"}"></label>
+        <label class="field" style="flex:1"><span>Neck (cm), optional</span><input id="neck-in" type="number" step="0.1" inputmode="decimal" placeholder="${last && last.neck ? last.neck : "e.g. 39"}"></label>
+        <button class="btn" type="submit">Save</button>
+      </form>
+      <p class="small muted" style="margin:0">Measure weekly, first thing in the morning: tape level around your belly button, relaxed, not sucked in.${bf != null ? ` Estimated body fat: <strong>${bf}%</strong> (US Navy method; roughly ±3%).` : S.profile.sex === "male" ? " Add your neck measurement for a body-fat estimate." : ""}</p>
+    </section>`;
+  }
+
   // ---------- Weight ----------
   function weightView(t) {
     const tr = N.trend(S.weights);
@@ -696,7 +802,16 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
       <rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" id="hit"/></svg><div class="tip" id="tip" hidden></div>`;
   }
   bind.train = () => T.bind();
-  bind.body = () => { bind.weight(); T.bindPhotos(); };
+  bind.body = () => {
+    bind.weight(); T.bindPhotos();
+    $("#waist-form").onsubmit = (e) => {
+      e.preventDefault();
+      const waist = Number($("#waist-in").value), neck = Number($("#neck-in").value);
+      if (!(waist > 30 && waist < 250)) { flash("Enter your waist in centimetres, e.g. 86."); return; }
+      store.measure(today(), { waist: Math.round(waist * 10) / 10, ...(neck > 20 && neck < 80 ? { neck: Math.round(neck * 10) / 10 } : {}) });
+      render(); flash("Waist saved. Measure again next week.", "good");
+    };
+  };
   bind.weight = () => {
     $("#weigh").onsubmit = (e) => {
       e.preventDefault();
@@ -788,9 +903,14 @@ body.resting { padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px)); }
         ${!due ? (nextCi != null ? ` Next weekly check-in ${nextCi === 0 ? "today" : nextCi === 1 ? "tomorrow" : `in ${nextCi} days`}.` : " Your first weekly check-in arrives after a week of logging.") : ""}</p>
       </section>
       <section class="card"><h2>What your log says</h2>${ins.map((i) => `<div class="insight"><span class="ic ${i.kind}" aria-hidden="true">${icon[i.kind]}</span><span>${esc(i.text)}</span></div>`).join("")}</section>
-      ${sample ? `<section class="card"><div class="row spread"><h2>Ask Claude</h2><button class="btn small" type="button" id="coach" ${coachBusy ? "disabled" : ""}>${coachBusy ? "Thinking…" : coachText ? "Ask again" : "Review my last 2 weeks"}</button></div>
+      ${aiText() ? `<section class="card"><div class="row spread"><h2>Ask Claude</h2><button class="btn small" type="button" id="coach" ${coachBusy ? "disabled" : ""}>${coachBusy ? "Thinking…" : coachText ? "Ask again" : "Review my last 2 weeks"}</button></div>
         ${coachText ? `<div class="coach">${esc(coachText)}</div>` : `<p class="small muted" style="margin:0">Sends your targets, daily totals, most-eaten foods and weight trend to Claude for specific suggestions.</p>`}</section>` : ""}
       ${healthCard()}
+      ${!inClaude ? `<section class="card"><h2>Claude features</h2>
+        <p class="small muted" style="margin:0">Photo-of-meal logging, label reading and coaching use Claude. In this app they need your own Anthropic API key, which stays on this device and is never included in backups. Get one at console.anthropic.com; each photo costs a fraction of a penny to a few pence on your Anthropic bill.</p>
+        ${apiKey() ? `<div class="row spread"><span class="small" style="color:var(--good)">Key saved on this device (…${esc(apiKey().slice(-4))})</span><button class="btn ghost small" type="button" id="key-del">Remove key</button></div>`
+          : `<div class="row" style="flex-wrap:nowrap"><input type="text" id="key-in" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Anthropic API key" style="flex:1"><button class="btn small" type="button" id="key-save">Save</button></div>`}
+      </section>` : ""}
       <h2 style="margin-top:6px">Your details</h2>
       ${profileForm(draft, "Update targets")}
       <section class="card"><h3>Backup</h3><p class="small muted" style="margin:0">${mode === "db" ? "Your log is saved to your Claude account and syncs wherever you open this page." : "Your log is saved in this browser only. Copy a backup now and then."}</p>
@@ -829,12 +949,14 @@ weight: [Weight]</pre></li>
   bind.plan = () => {
     if (!S.profile) { bindSetup(); return; }
     bindProfile();
+    const ks = $("#key-save"); if (ks) ks.onclick = () => { const v = $("#key-in").value.trim(); if (!/^sk-ant-/.test(v)) { flash("That doesn't look like an Anthropic API key. It starts with sk-ant-."); return; } try { localStorage.setItem(AI_KEY, v); } catch (e) {} render(); flash("Key saved. Photo-of-meal logging is now on the Add food screen.", "good"); };
+    const kd = $("#key-del"); if (kd) kd.onclick = () => { try { localStorage.removeItem(AI_KEY); } catch (e) {} render(); };
     const hi2 = $("#h-import2"); if (hi2) hi2.onclick = () => openSheet({ step: "health" });
     const acc = $("#ci-accept"); if (acc) acc.onclick = () => { store.profile({ ...S.profile, kcal: lastCheckIn.proposed, lastCheckIn: today() }); draft = null; render(); flash(`Daily target is now ${lastCheckIn.proposed} kcal.`, "good"); };
     const keep = $("#ci-keep"); if (keep) keep.onclick = () => { store.profile({ ...S.profile, kcal: S.profile.kcal || N.targets(S.profile, S.weights, S.days, today()).kcal, lastCheckIn: today() }); draft = null; render(); };
     const c = $("#coach"); if (c) c.onclick = runCoach;
     $("#backup").onclick = () => {
-      const text = JSON.stringify({ app: "fuel-log", v: 3, profile: S.profile, weights: S.weights, foods: S.foods, days: S.days, meals: S.meals, health: S.health, workouts: S.workouts, routines: S.routines, exercises: S.exercises });
+      const text = JSON.stringify({ app: "fuel-log", v: 3, profile: S.profile, weights: S.weights, foods: S.foods, days: S.days, meals: S.meals, health: S.health, workouts: S.workouts, routines: S.routines, exercises: S.exercises, measures: S.measures });
       const out = $("#backup-out");
       const show = () => { out.innerHTML = `<textarea id="backup-text" rows="4" readonly></textarea>`; const ta = $("#backup-text"); ta.value = text; ta.select(); };
       try { navigator.clipboard.writeText(text).then(() => { out.innerHTML = `<p class="small" style="margin:0;color:var(--good)">Copied ${Object.keys(S.days).length} days, ${Object.keys(S.weights).length} weigh-ins, ${Object.keys(S.foods).length} foods and ${Object.keys(S.workouts).length} workouts. Photos aren't included.</p>`; }, show); } catch (e) { show(); }
@@ -855,6 +977,7 @@ weight: [Weight]</pre></li>
           for (const w of Object.values(b.workouts || {})) store.workout(w);
           for (const r of Object.values(b.routines || {})) store.routine(r);
           for (const x of Object.values(b.exercises || {})) store.exercise(x);
+          for (const [d, m] of Object.entries(b.measures || {})) store.measure(d, m);
           render();
         } catch (e) { out.insertAdjacentHTML("beforeend", `<p class="small" style="color:var(--warn)">That isn't a Fuel Log backup. Copy it again from the Backup section.</p>`); }
       };
@@ -873,11 +996,8 @@ weight: [Weight]</pre></li>
       weightKg: t.kg, trendKgPerWeek: N.weeklyChange(S.weights), targetKgPerWeek: t.weeklyTargetKg, last14Days: daily, mostEatenFoods: top };
     const prompt = `You are a practical sports nutrition coach. Here is two weeks of someone's food and weight log as JSON. Their goal: ${data.goal}.\n\n${JSON.stringify(data)}\n\nGive 4 to 6 short, specific recommendations in plain UK English, as a numbered list. Prefer changes to foods they already eat (name them, with grams and the effect on calories or protein). Comment on whether the weight trend matches the goal and what to change if not. No preamble, no medical claims, under 220 words.`;
     try {
-      const r = await sample(prompt, { onText: ({ text }) => { coachText = text; const el = $(".coach"); if (el) el.textContent = text; else render(); } });
-      coachText = r.text;
-    } catch (e) {
-      coachText = e && e.code === "rate_limited" ? "Claude is busy right now. Try again in a minute." : e && e.code === "not_granted" ? "Claude access wasn't allowed for this page." : "Couldn't reach Claude. Try again shortly.";
-    }
+      coachText = await claudeText(prompt, ({ text }) => { coachText = text; const el = $(".coach"); if (el) el.textContent = text; else render(); });
+    } catch (e) { coachText = aiError(e); }
     coachBusy = false; render();
   }
 
@@ -943,7 +1063,8 @@ weight: [Weight]</pre></li>
         <div class="choices">
           ${liveScanOk ? `<button class="choice" type="button" id="live"><strong>Scan barcode</strong><span>Point your camera at it</span></button>` : ""}
           <label class="choice"><strong>${liveScanOk ? "Barcode photo" : "Scan barcode"}</strong><span>Take a photo of the barcode</span><input type="file" id="bc-file" accept="image/*" capture="environment"></label>
-          ${imagesOk ? `<label class="choice"><strong>Read label</strong><span>Photo of the nutrition panel; Claude fills it in</span><input type="file" id="lbl-file" accept="image/*" capture="environment"></label>` : ""}
+          ${aiImages() ? `<label class="choice"><strong>Photo of meal</strong><span>Claude estimates everything on the plate</span><input type="file" id="meal-file" accept="image/*"></label>` : ""}
+          ${aiImages() ? `<label class="choice"><strong>Read label</strong><span>Photo of the nutrition panel; Claude fills it in</span><input type="file" id="lbl-file" accept="image/*" capture="environment"></label>` : ""}
           <button class="choice" type="button" id="manual"><strong>Enter manually</strong><span>Type the per-100g values</span></button>
           <button class="choice" type="button" id="typebc"><strong>Type barcode</strong><span>If the photo won't read</span></button>
         </div>
@@ -957,6 +1078,7 @@ weight: [Weight]</pre></li>
         </div>`;
       $("#bc-file").onchange = (e) => e.target.files[0] && handleBarcodePhoto(e.target.files[0]);
       const lv = $("#live"); if (lv) lv.onclick = () => { sh.step = "camera"; drawSheet(); };
+      const mf = $("#meal-file"); if (mf) mf.onchange = (e) => e.target.files[0] && readMeal(e.target.files[0]);
       const lf = $("#lbl-file"); if (lf) lf.onchange = (e) => e.target.files[0] && readLabel(e.target.files[0], blankFood());
       $("#manual").onclick = () => { sh.step = "form"; sh.food = blankFood(); drawSheet(); };
       $("#typebc").onclick = () => { sh.step = "typebc"; drawSheet(); };
@@ -973,6 +1095,30 @@ weight: [Weight]</pre></li>
       $("#tbc").onsubmit = (e) => { e.preventDefault(); const v = $("#tbc-v").value.replace(/\D/g, ""); if (v.length >= 8) lookupBarcode(v); };
       $("#back").onclick = () => { sh.step = "choose"; drawSheet(); };
       $("#tbc-v").focus();
+    } else if (sh.step === "plate") {
+      const tot = { kcal: 0, p: 0 };
+      for (const it of sh.plate) if (it.on) { const n = N.portion(it, it.grams); tot.kcal += n.kcal; tot.p += n.p; }
+      el.innerHTML = head("Check your meal") + `
+        <p class="small muted" style="margin:0">Claude's estimate from the photo. Adjust the grams if anything looks off, untick what you didn't eat.${sh.plateNote ? " " + esc(sh.plateNote) : ""}</p>
+        <div class="results" style="max-height:46vh">${sh.plate.map((it, k) => { const n = N.portion(it, it.grams); return `<div class="entry" style="grid-template-columns:auto minmax(0,1fr) 5.2rem">
+          <input type="checkbox" data-pon="${k}" ${it.on ? "checked" : ""} aria-label="Include ${esc(it.name)}" style="width:22px;height:22px;accent-color:var(--primary)">
+          <div><div class="nm">${esc(it.name)}</div><div class="sub">${n.kcal} kcal · ${n.p}g protein</div></div>
+          <input type="number" inputmode="numeric" data-pg="${k}" value="${it.grams}" aria-label="Grams of ${esc(it.name)}" style="text-align:center"></div>`; }).join("")}</div>
+        <div class="row spread"><strong class="num">${Math.round(tot.kcal)} kcal · ${Math.round(tot.p)}g protein</strong>
+          <select id="plate-meal" style="width:auto">${N.MEALS.map((m) => `<option value="${m}" ${m === sh.meal ? "selected" : ""}>${m[0].toUpperCase() + m.slice(1)}</option>`).join("")}</select></div>
+        <button class="btn wide" type="button" id="plate-log" ${sh.plate.some((x) => x.on) ? "" : "disabled"}>Log ${sh.plate.filter((x) => x.on).length} item${sh.plate.filter((x) => x.on).length === 1 ? "" : "s"}</button>`;
+      el.querySelectorAll("[data-pon]").forEach((c) => (c.onchange = () => { sh.plate[Number(c.dataset.pon)].on = c.checked; drawSheet(); }));
+      el.querySelectorAll("[data-pg]").forEach((g) => (g.onchange = () => { sh.plate[Number(g.dataset.pg)].grams = Math.max(1, Math.round(Number(g.value) || 1)); drawSheet(); }));
+      $("#plate-meal").onchange = (e) => (sh.meal = e.target.value);
+      $("#plate-log").onclick = () => {
+        const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+        const list = sh.plate.filter((x) => x.on).map((it) => {
+          const id = "ai-" + slug(it.name);
+          const food = S.foods[id] && S.foods[id].source !== "photo estimate" ? S.foods[id] : { id, name: it.name, brand: "", barcode: "", per100: it.per100, servingG: it.grams, source: "photo estimate" };
+          return { food, grams: it.grams, meal: sh.meal };
+        });
+        dlg.close(); logMany(list); flash(`Logged ${list.length} item${list.length === 1 ? "" : "s"} from your photo.`, "good");
+      };
     } else if (sh.step === "camera") {
       el.innerHTML = head("Scan barcode") + `<video id="cam" playsinline muted style="width:100%;border-radius:10px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
         <div class="status" role="status" id="cam-status">Starting camera…</div>
@@ -1011,7 +1157,7 @@ weight: [Weight]</pre></li>
           <div class="grid2"><label class="field"><span>Brand</span><input type="text" id="ff-brand" value="${esc(f.brand)}"></label><label class="field"><span>Barcode</span><input type="text" id="ff-barcode" inputmode="numeric" value="${esc(f.barcode)}"></label></div>
           <h3>Per 100g</h3>
           <div class="grid3">${num("kcal", "Calories")}${num("p", "Protein g")}${num("c", "Carbs g")}${num("f", "Fat g")}${num("fibre", "Fibre g")}<label class="field"><span>Serving g</span><input type="number" inputmode="decimal" id="ff-serving" value="${f.servingG ?? ""}"></label></div>
-          ${imagesOk && !sh.existing ? `<label class="btn ghost wide" style="position:relative;text-align:center">Fill from a label photo<input type="file" id="ff-label" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>` : ""}
+          ${aiImages() && !sh.existing ? `<label class="btn ghost wide" style="position:relative;text-align:center">Fill from a label photo<input type="file" id="ff-label" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>` : ""}
           <div class="row">${sh.existing ? `<button class="btn ghost" type="button" id="ff-del">Delete</button>` : ""}<button class="btn" type="submit" style="flex:1">${sh.editOnly ? "Save food" : "Save and choose amount"}</button></div>
         </form>`;
       const fl = $("#ff-label"); if (fl) fl.onchange = (e) => e.target.files[0] && readLabel(e.target.files[0], collectForm());
@@ -1106,25 +1252,94 @@ weight: [Weight]</pre></li>
     if (food) { sh.food = food; sh.status = "Found on Open Food Facts. Check the values against the pack, then save."; sh.statusKind = ""; }
     else {
       sh.food = blankFood(code);
-      sh.status = imagesOk ? `Barcode ${code} is new. Photograph the nutrition label and Claude will fill this in, or type the values. Next time you scan it, it's instant.` : `Barcode ${code} is new. Enter the values from the pack once; next time you scan it, it's instant.`;
+      sh.status = aiImages() ? `Barcode ${code} is new. Photograph the nutrition label and Claude will fill this in, or type the values. Next time you scan it, it's instant.` : `Barcode ${code} is new. Enter the values from the pack once; next time you scan it, it's instant.`;
       sh.statusKind = "warn";
     }
     drawSheet();
   }
+  // ---------- Claude ----------
+  // In the Claude version, requests go through your Claude account. In the
+  // installed app they use your own Anthropic API key, kept only on this device.
+  const AI_KEY = "fuel-log-anthropic-key";
+  const apiKey = () => { try { return localStorage.getItem(AI_KEY) || ""; } catch (e) { return ""; } };
+  const aiText = () => !!sample || (!inClaude && !!apiKey());
+  const aiImages = () => (sample && imagesOk) || (!inClaude && !!apiKey());
+  let sdkP = null;
+  async function apiClient() {
+    sdkP = sdkP || import("https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.129.0/+esm");
+    const { default: Anthropic } = await sdkP;
+    return new Anthropic({ apiKey: apiKey(), dangerouslyAllowBrowser: true });
+  }
+  const blobToB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); });
+  async function apiAsk(prompt, images = []) {
+    const client = await apiClient();
+    const content = [];
+    for (const b of images) content.push({ type: "image", source: { type: "base64", media_type: b.type || "image/jpeg", data: await blobToB64(b) } });
+    content.push({ type: "text", text: prompt });
+    const r = await client.beta.messages.create({
+      model: "claude-opus-5-5", max_tokens: 4000,
+      betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
+      output_config: { effort: "low" },
+      messages: [{ role: "user", content }],
+    });
+    if (r.stop_reason === "refusal") throw { code: "refusal" };
+    return r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+  }
+  async function claudeJSON(prompt, images) {
+    if (sample) return sample.json(prompt, images ? { images, modelTier: "default" } : { modelTier: "default" });
+    const text = await apiAsk(prompt + "\n\nReply with the JSON only, no other text.", images || []);
+    const m = text.match(/[\[{][\s\S]*[\]}]/);
+    return JSON.parse(m ? m[0] : text);
+  }
+  async function claudeText(prompt, onText) {
+    if (sample) return (await sample(prompt, { onText })).text;
+    const text = await apiAsk(prompt);
+    if (onText) onText({ text });
+    return text;
+  }
+  function aiError(e) {
+    const status = e && (e.status || (e.error && e.error.status));
+    if (status === 401) return "Your Anthropic API key was rejected. Check it on the Plan tab.";
+    if (status === 429 || (e && e.code === "rate_limited")) return "Claude is busy. Try again in a minute.";
+    if (e && e.code === "not_granted") return "Claude access wasn't allowed for this page.";
+    if (e && e.code === "refusal") return "Claude couldn't help with that photo.";
+    return "Couldn't reach Claude. Check your connection and try again.";
+  }
+
+  // ---------- Photo of a meal ----------
+  async function readMeal(file) {
+    sh.step = "busy"; sh.status = "Claude is looking at your meal…"; drawSheet();
+    try {
+      const canvas = await shrink(file, 1400);
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+      const out = await claudeJSON(
+        `This photo shows a meal or snack someone is about to log in a UK calorie tracker. Identify each separate food or drink visible, estimate its portion in grams (ml for drinks) from the plate, packaging and utensils, and estimate the nutrition of that portion using typical UK recipes. Include cooking oil, butter and sauces when they're visible or likely. Be realistic rather than optimistic about portions. Return JSON: {"items": [{"name": short food name, "grams": number, "kcal": number, "protein": number, "carbs": number, "fat": number, "fibre": number}], "confidence": "low" | "medium" | "high", "note": one short sentence on anything uncertain}. If there's no food in the photo, return {"items": [], "confidence": "low", "note": "No food found"}.`, [blob]);
+      const num = (x) => (typeof x === "number" && isFinite(x) && x >= 0 ? x : 0);
+      sh.plate = (out.items || []).filter((it) => it && it.name && num(it.grams) > 0).map((it) => ({
+        name: String(it.name).slice(0, 60), grams: Math.round(num(it.grams)), on: true,
+        per100: { kcal: Math.round((num(it.kcal) / num(it.grams)) * 100), p: Math.round((num(it.protein) / num(it.grams)) * 1000) / 10, c: Math.round((num(it.carbs) / num(it.grams)) * 1000) / 10, f: Math.round((num(it.fat) / num(it.grams)) * 1000) / 10, fibre: Math.round((num(it.fibre) / num(it.grams)) * 1000) / 10 },
+      }));
+      sh.plateNote = [out.confidence ? `Confidence: ${out.confidence}.` : "", out.note || ""].join(" ").trim();
+      if (!sh.plate.length) { sh.step = "choose"; sh.status = "Claude couldn't see any food in that photo. Try again with the whole plate in frame."; sh.statusKind = "warn"; drawSheet(); return; }
+      sh.step = "plate"; sh.status = null;
+    } catch (e) { sh.step = "choose"; sh.status = aiError(e); sh.statusKind = "warn"; }
+    drawSheet();
+  }
+
   async function readLabel(file, base) {
     sh.step = "busy"; sh.status = "Claude is reading the label…"; drawSheet();
     try {
       const canvas = await shrink(file, 1400);
       const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
-      const out = await sample.json(
+      const out = await claudeJSON(
         `This photo shows a food package's nutrition label (and maybe its front). Read the PER 100g (or per 100ml) column. Use kcal, not kJ; if only kJ is shown, divide by 4.184. Return JSON only: {"name": product name or "" if not visible, "brand": "" if not visible, "kcal": number, "protein": number, "carbs": number, "fat": number, "fibre": number or 0, "servingG": serving size in grams or null}. Use null for any value you cannot read.`,
-        { images: [blob], modelTier: "default" });
+        [blob]);
       const v = (x) => (typeof x === "number" && isFinite(x) ? x : "");
       sh.food = { ...base, name: base.name || out.name || "", brand: base.brand || out.brand || "", per100: { kcal: v(out.kcal), p: v(out.protein), c: v(out.carbs), f: v(out.fat), fibre: v(out.fibre) }, servingG: out.servingG || base.servingG || "", source: "label" };
       sh.status = "Filled from the label. Check the numbers, then save."; sh.statusKind = "";
     } catch (e) {
       sh.food = base;
-      sh.status = e && e.code === "rate_limited" ? "Claude is busy. Try the photo again in a minute, or type the values." : "Couldn't read that label. Try a sharper, straight-on photo, or type the values.";
+      sh.status = e && (e.status || e.code) ? aiError(e) : "Couldn't read that label. Try a sharper, straight-on photo, or type the values.";
       sh.statusKind = "warn";
     }
     sh.step = "form"; drawSheet();

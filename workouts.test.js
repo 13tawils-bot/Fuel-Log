@@ -83,3 +83,47 @@ test("exercise library", () => {
   assert.equal(idx["x-pull-up-assisted"].type, "as");
   assert.equal(idx["x-running"].type, "cd");
 });
+
+test("strength trend averages estimated-1RM change across lifts", () => {
+  const s = W.strengthTrend(history, idx, 0);
+  assert.equal(s.lifts, 2);
+  assert.ok(s.pct > 0);
+  assert.equal(W.strengthTrend({}, idx, 0).pct, null);
+});
+
+test("PR history: first session is the baseline, later bests are PRs", () => {
+  const h = W.prHistory(bench, history);
+  assert.ok(h.every((p) => p.workoutId === "w2"));
+  assert.deepEqual(h.map((p) => p.kind).sort(), ["1RM", "volume"]);
+  const pullH = W.prHistory(pull, history);
+  assert.equal(pullH.length, 0, "only one pull-up session so far");
+  const recent = W.recentPRs(history, idx);
+  assert.ok(recent.length >= 2);
+  assert.ok(recent.every((p, i) => i === 0 || recent[i - 1].start >= p.start));
+});
+
+test("compare to last time and progressive-overload score", () => {
+  const c = W.compareToLast(bench, [set(82.5, 10), set(82.5, 10), set(82.5, 10)], history, Infinity);
+  assert.equal(c.metric, "volume");
+  assert.equal(c.prev.volume, 2400);
+  assert.equal(c.pct, 3);
+  assert.equal(W.compareToLast(idx["x-deadlift-barbell"], [set(100, 5)], history, Infinity), null);
+  const o = W.overloadScore(history, idx, t0 + 10 * DAY, 30);
+  assert.equal(o.total, 2);
+  assert.equal(o.improved, 2);
+});
+
+test("compare like with like mid-workout", () => {
+  const c = W.compareToLast(bench, [set(82.5, 10)], history, Infinity, true);
+  assert.equal(c.prev.volume, 800);
+  assert.equal(c.pct, 3);
+});
+
+test("calendar month groups workouts by day with durations", () => {
+  const d = new Date(history.w1.start);
+  const m = W.calendarMonth(history, d.getFullYear(), d.getMonth());
+  assert.equal(m.sessions, 3);
+  assert.equal(m.gymDays, 3);
+  assert.equal(m.avgMin, 60);
+  assert.equal(m.totalMin, 180);
+});

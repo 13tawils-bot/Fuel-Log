@@ -103,5 +103,6 @@
     weights, foods, days, health, workouts, routines,
     meals: { "m-demo-1": { id: "m-demo-1", name: "Usual breakfast", meal: "breakfast", items: breakfasts[0]().map((x) => ({ foodId: x.foodId, name: x.name, grams: x.grams, per100: foods[x.foodId].per100 })) } },
     exercises: {}, photos: {},
+    measures: { [N.addDays(today, -28)]: { waist: 86.8, neck: 39 }, [N.addDays(today, -21)]: { waist: 86.6, neck: 39 }, [N.addDays(today, -14)]: { waist: 86.5, neck: 39 }, [N.addDays(today, -7)]: { waist: 86.4, neck: 39.2 } },
   };
 })();

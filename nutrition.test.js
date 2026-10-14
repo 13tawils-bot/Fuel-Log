@@ -171,3 +171,43 @@ test("common foods are complete and internally consistent", () => {
     assert.ok(f.units.every((u) => u.g > 0 && u.label));
   }
 });
+
+test("won the day: protein, calories and movement", () => {
+  const target = { kcal: 2000, p: 150 };
+  const day = (kcal, p) => ({ entries: [{ kcal: kcal / 2, p: p / 2, c: 0, f: 0, fibre: 0 }, { kcal: kcal / 2, p: p / 2, c: 0, f: 0, fibre: 0 }] });
+  const all = N.dayWins({ day: day(2050, 150), target, goal: "lose", trained: true });
+  assert.deepEqual([all.protein, all.calories, all.moved, all.score, all.good], [true, true, true, 3, true]);
+  const lazy = N.dayWins({ day: day(2600, 90), target, goal: "lose", steps: 3000 });
+  assert.equal(lazy.score, 0);
+  assert.equal(N.dayWins({ day: day(1900, 140), target, goal: "lose", steps: 9000 }).score, 3, "steps count as moving");
+  assert.equal(N.dayWins({ day: { entries: [] }, target, goal: "lose" }), null, "nothing logged");
+});
+
+test("week streak tolerates two off days a week", () => {
+  const today = "2026-10-14"; // a Wednesday
+  const good = new Set();
+  for (let i = 1; i <= 21; i++) { const d = N.addDays(today, -i); const dow = (new Date(d + "T12:00").getDay() + 6) % 7; if (dow < 5) good.add(d); }
+  const s = N.weekStreak((d) => (good.has(d) ? { good: true } : { good: false }), today);
+  assert.equal(N.mondayOf(today), "2026-10-12");
+  assert.equal(s.goodThisWeek, 2);
+  assert.equal(s.streak, 2, "two full weeks with 5 good days");
+  assert.equal(s.week.filter((x) => x.future).length, 4);
+});
+
+test("recomp verdicts from waist, strength and weight", () => {
+  const today = "2026-10-13", weights = {};
+  for (let i = 30; i >= 0; i--) weights[N.addDays(today, -i)] = 82;
+  const m = (a, b) => ({ [N.addDays(today, -28)]: { waist: a }, [today]: { waist: b } });
+  assert.equal(N.recomp({ weights, measures: m(90, 88), strength: { pct: 6, lifts: 3 }, goal: "lose", today }).verdict, "Losing fat and building muscle");
+  assert.equal(N.recomp({ weights, measures: m(90, 88), strength: { pct: -5, lifts: 3 }, goal: "lose", today }).kind, "warn");
+  assert.match(N.recomp({ weights, measures: m(90, 90.2), strength: { pct: 4, lifts: 2 }, goal: "lose", today }).verdict, /Recomposition/);
+  const noWaist = N.recomp({ weights, strength: { pct: 4, lifts: 2 }, goal: "lose", today });
+  assert.equal(noWaist.verdict, "Getting stronger");
+  assert.match(noWaist.detail, /waist/);
+  assert.equal(N.recomp({ weights, goal: "lose", today }).verdict, "Not enough data yet");
+});
+
+test("Navy body-fat estimate", () => {
+  assert.equal(N.navyBodyFat("male", 180, 90, 40), 18.4);
+  assert.equal(N.navyBodyFat("female", 165, 80, 33), null);
+});

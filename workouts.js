@@ -172,5 +172,117 @@
     return out;
   }
 
-  return { SET_TYPES, e1rm, sessions, previous, bests, setPRs, increment, nextTarget, series, muscleSets, summary, weeklyCounts };
+  // Average change in estimated 1RM across the lifts trained at least twice
+  // since a date, for the recomp scorecard. Top four lifts by sessions.
+  function strengthTrend(workouts, exIndex, since) {
+    const by = {};
+    for (const wk of Object.values(workouts)) {
+      if (wk.start < since) continue;
+      for (const ex of wk.exercises || []) {
+        const def = exIndex[ex.exId];
+        if (!def || def.type !== "wr") continue;
+        const best = Math.max(0, ...(ex.sets || []).filter(working).map((s) => e1rm(s.kg, s.reps)));
+        if (best > 0) (by[ex.exId] ||= []).push({ start: wk.start, best });
+      }
+    }
+    const lifts = Object.values(by).filter((a) => a.length >= 2).sort((a, b) => b.length - a.length).slice(0, 4);
+    if (!lifts.length) return { pct: null, lifts: 0 };
+    const pcts = lifts.map((a) => { a.sort((x, y) => x.start - y.start); return ((a[a.length - 1].best - a[0].best) / a[0].best) * 100; });
+    return { pct: Math.round((pcts.reduce((x, y) => x + y, 0) / pcts.length) * 10) / 10, lifts: lifts.length };
+  }
+
+  const PR_LABELS = { weight: "Heaviest weight", "1RM": "Best est. 1RM", volume: "Best set volume", reps: "Most reps", time: "Longest time", distance: "Furthest distance" };
+
+  // Every record an exercise has set, in order. The first session is the
+  // baseline; each later set that beats a best is a PR, like a gym app's records tab.
+  function prHistory(exercise, workouts) {
+    const out = [], b = { kg: 0, e1rm: 0, volume: 0, reps: 0, sec: 0, km: 0 };
+    sessions(exercise.id, workouts).forEach((ses, n) => {
+      const found = {};
+      for (const s of ses.sets.filter(working)) {
+        const kg = s.kg || 0, reps = s.reps || 0, e = e1rm(kg, reps), v = kg * reps;
+        const weighted = exercise.type === "wr" || (exercise.type === "bw" && kg > 0);
+        if (weighted && kg > b.kg) { b.kg = kg; found.weight = s; }
+        if (weighted && e > b.e1rm) { b.e1rm = e; found["1RM"] = s; }
+        if (exercise.type === "wr" && v > b.volume) { b.volume = v; found.volume = s; }
+        if (exercise.type !== "wr" && exercise.type !== "du" && exercise.type !== "cd" && !(kg > 0) && reps > b.reps) { b.reps = reps; found.reps = s; }
+        if (exercise.type === "du" && (s.sec || 0) > b.sec) { b.sec = s.sec; found.time = s; }
+        if (exercise.type === "cd" && (s.km || 0) > b.km) { b.km = s.km; found.distance = s; }
+      }
+      if (n > 0) for (const [kind, set] of Object.entries(found)) out.push({ date: ses.date, start: ses.start, workoutId: ses.workoutId, exId: exercise.id, kind, label: PR_LABELS[kind], set, e1rm: e1rm(set.kg, set.reps) });
+    });
+    return out;
+  }
+
+  function recentPRs(workouts, exIndex, limit = 10) {
+    const ids = new Set();
+    for (const w of Object.values(workouts)) for (const ex of w.exercises || []) ids.add(ex.exId);
+    const all = [];
+    for (const id of ids) if (exIndex[id]) all.push(...prHistory(exIndex[id], workouts));
+    return all.sort((a, b) => b.start - a.start).slice(0, limit);
+  }
+
+  // How a set of sets compares with the last time you did the exercise.
+  function sessionStats(sets, type) {
+    const ws = (sets || []).filter(working);
+    return {
+      volume: ws.reduce((a, s) => a + (s.kg || 0) * (s.reps || 0), 0),
+      reps: ws.reduce((a, s) => a + (s.reps || 0), 0),
+      sec: ws.reduce((a, s) => a + (s.sec || 0), 0),
+      km: ws.reduce((a, s) => a + (s.km || 0), 0),
+      top: Math.max(0, ...ws.map((s) => e1rm(s.kg, s.reps))),
+      sets: ws.length,
+      metric: type === "wr" ? "volume" : type === "du" ? "sec" : type === "cd" ? "km" : "reps",
+    };
+  }
+  // `sameSets` compares like with like mid-workout: your first N working sets
+  // against the first N from last time.
+  function compareToLast(exercise, sets, workouts, before, sameSets = false) {
+    const prev = previous(exercise.id, workouts, before);
+    if (!prev) return null;
+    const done = (sets || []).filter(working);
+    const prevSets = sameSets ? prev.sets.filter(working).slice(0, done.length) : prev.sets;
+    const a = sessionStats(prevSets, exercise.type), b = sessionStats(sets, exercise.type);
+    const m = a.metric;
+    if (!(a[m] > 0) || !(b[m] > 0)) return { prev: a, now: b, metric: m, pct: null };
+    return { prev: a, now: b, metric: m, pct: Math.round(((b[m] - a[m]) / a[m]) * 100) };
+  }
+
+  // Progressive overload: of the sessions in the window, how many beat the
+  // previous session of the same exercise (higher est. 1RM, volume or reps).
+  function overloadScore(workouts, exIndex, now = Date.now(), days = 28) {
+    const since = now - days * 86400000;
+    let improved = 0, total = 0;
+    for (const w of Object.values(workouts)) {
+      if (w.start < since) continue;
+      for (const ex of w.exercises || []) {
+        const def = exIndex[ex.exId]; if (!def) continue;
+        const c = compareToLast(def, ex.sets, workouts, w.start);
+        if (!c) continue;
+        total++;
+        const up = def.type === "wr" ? c.now.top > c.prev.top || c.now.volume > c.prev.volume : c.now[c.metric] > c.prev[c.metric];
+        if (up) improved++;
+      }
+    }
+    return { improved, total, pct: total ? Math.round((improved / total) * 100) : null };
+  }
+
+  // Gym days for a calendar: workouts grouped by date with exact times.
+  function calendarMonth(workouts, year, month) {
+    const days = {};
+    for (const w of Object.values(workouts)) {
+      const d = new Date(w.start);
+      if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+      (days[d.getDate()] ||= []).push(w);
+    }
+    const list = Object.values(days).flat();
+    const mins = list.map((w) => Math.max(1, Math.round(((w.end || w.start) - w.start) / 60000)));
+    return {
+      days, sessions: list.length, gymDays: Object.keys(days).length,
+      totalMin: mins.reduce((a, b) => a + b, 0),
+      avgMin: mins.length ? Math.round(mins.reduce((a, b) => a + b, 0) / mins.length) : 0,
+    };
+  }
+
+  return { calendarMonth, strengthTrend, prHistory, recentPRs, compareToLast, overloadScore, PR_LABELS, SET_TYPES, e1rm, sessions, previous, bests, setPRs, increment, nextTarget, series, muscleSets, summary, weeklyCounts };
 });

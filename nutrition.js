@@ -398,6 +398,73 @@
     return !!first && daysBetween(first, today) >= 7;
   }
 
+  // ---------- Won the day ----------
+  // Three simple wins: protein hit, moved (a workout or the step goal) and
+  // calories roughly on target. Two of three counts as a good day.
+  function dayWins({ day, target, goal, trained, steps, stepGoal = 8000 }) {
+    const entries = (day && day.entries) || [];
+    if (entries.length < 2 && !trained && steps == null) return null;
+    const t = totals(entries), logged = entries.length >= 2;
+    const band = Math.max(150, target.kcal * 0.1);
+    const protein = logged && t.p >= target.p * 0.9;
+    const calories = logged && (goal === "lose" ? t.kcal <= target.kcal + band && t.kcal >= target.kcal - 2 * band : Math.abs(t.kcal - target.kcal) <= band);
+    const moved = !!trained || (steps != null && steps >= stepGoal);
+    const score = [protein, calories, moved].filter(Boolean).length;
+    return { protein, calories, moved, score, good: score >= 2, kcal: t.kcal, p: t.p };
+  }
+
+  const mondayOf = (d) => addDays(d, -((toDate(d).getDay() + 6) % 7));
+
+  // Good days per Monday-to-Sunday week, and a streak of weeks with 5+ good
+  // days, so a couple of off days never break it.
+  function weekStreak(winsFor, today, need = 5, maxWeeks = 52) {
+    const thisMon = mondayOf(today);
+    const week = Array.from({ length: 7 }, (_, i) => { const d = addDays(thisMon, i); return { date: d, future: d > today, wins: d > today ? null : winsFor(d) }; });
+    const goodThisWeek = week.filter((x) => x.wins && x.wins.good).length;
+    let streak = 0;
+    for (let w = 1; w <= maxWeeks; w++) {
+      const mon = addDays(thisMon, -7 * w);
+      let good = 0;
+      for (let i = 0; i < 7; i++) { const r = winsFor(addDays(mon, i)); if (r && r.good) good++; }
+      if (good >= need) streak++; else break;
+    }
+    if (goodThisWeek >= need) streak++;
+    return { week, goodThisWeek, need, streak };
+  }
+
+  // ---------- Recomp scorecard ----------
+  // During a recomp the scale barely moves, so judge by waist and strength too.
+  function navyBodyFat(sex, heightCm, waist, neck) {
+    if (sex !== "male" || !(waist > neck) || !(heightCm > 0) || !neck) return null;
+    return Math.round((495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(heightCm)) - 450) * 10) / 10;
+  }
+  function recomp({ weights, measures = {}, strength, goal, today, days = 28 }) {
+    const from = addDays(today, -days);
+    const tr = trend(weights);
+    const at = (d) => { let v = null; for (const p of tr) if (p.date <= d) v = p.trend; return v; };
+    const firstW = tr.find((p) => p.date >= from);
+    const weightChange = firstW && at(today) != null && daysBetween(firstW.date, today) >= 10 ? Math.round((at(today) - firstW.trend) * 10) / 10 : null;
+    const ms = Object.entries(measures).filter(([d, m]) => d >= addDays(today, -days - 7) && m.waist > 0).sort();
+    const waistChange = ms.length >= 2 && daysBetween(ms[0][0], ms[ms.length - 1][0]) >= 10 ? Math.round((ms[ms.length - 1][1].waist - ms[0][1].waist) * 10) / 10 : null;
+    const sPct = strength && strength.lifts >= 1 ? strength.pct : null;
+    const dir = (v, eps) => (v == null ? null : v > eps ? 1 : v < -eps ? -1 : 0);
+    const w = dir(waistChange, 0.5), s = dir(sPct, 2), kg = dir(weightChange, 0.3);
+    let verdict, kind, detail;
+    if (w === null && s === null) { verdict = "Not enough data yet"; kind = "info"; detail = "Log your waist weekly and train for a few weeks, and this will tell you whether you're losing fat, building muscle or both."; }
+    else if (w === null) {
+      verdict = s > 0 ? "Getting stronger" : s < 0 ? "Strength is slipping" : "Strength is holding";
+      kind = s < 0 ? "warn" : "good";
+      detail = "Add a weekly waist measurement. With strength and waist together, this can tell fat loss from muscle gain, which the scale can't.";
+    } else if (w < 0 && s > 0) { verdict = "Losing fat and building muscle"; kind = "good"; detail = "Waist down while lifts go up: the best result there is. Keep doing exactly this."; }
+    else if (w < 0 && s === 0) { verdict = "Losing fat, keeping strength"; kind = "good"; detail = "Waist is coming down and your lifts are holding, so the weight you're losing is mostly fat."; }
+    else if (w < 0 && s < 0) { verdict = "Losing fat, but strength is slipping"; kind = "warn"; detail = "Keep protein at target and keep lifting heavy. If lifts keep dropping, eat about 150 kcal more a day."; }
+    else if (w === 0 && s > 0) { verdict = kg > 0 ? "Building muscle with a steady waist" : "Recomposition: stronger at the same waist"; kind = "good"; detail = "Lifts are up while your waist hasn't grown, which points to muscle rather than fat."; }
+    else if (w === 0) { verdict = "No clear change yet"; kind = "info"; detail = "Changes take 3 to 4 weeks to show. Keep protein high and keep adding weight or reps."; }
+    else if (s > 0) { verdict = "Gaining muscle and some fat"; kind = goal === "gain" ? "good" : "warn"; detail = goal === "gain" ? "Normal for a lean gain. If your waist grows more than about 1 cm a month, trim 150 kcal a day." : "Your waist is growing. Trim about 150 kcal a day and keep training."; }
+    else { verdict = "Waist going up without strength gains"; kind = "warn"; detail = "That's mostly fat. Bring calories down about 200 a day and focus on adding weight to your main lifts."; }
+    return { verdict, kind, detail, weightChange, waistChange, strengthPct: sPct, lifts: strength ? strength.lifts : 0 };
+  }
+
   // Map an Open Food Facts product to a library food.
   function fromOpenFoodFacts(code, product) {
     const n = product.nutriments || {};
@@ -411,5 +478,5 @@
     };
   }
 
-  return { GOALS, ACTIVITY, MEALS, KCAL_PER_KG, iso, addDays, daysBetween, mealForHour, portion, totals, trend, weeklyChange, latestWeight, measuredMaintenance, estimatedMaintenance, targets, habits, suggest, insights, healthInsights, parseHealth, planRest, checkIn, checkInDue, fromOpenFoodFacts };
+  return { GOALS, ACTIVITY, MEALS, KCAL_PER_KG, iso, addDays, daysBetween, mealForHour, portion, totals, trend, weeklyChange, latestWeight, measuredMaintenance, estimatedMaintenance, targets, habits, suggest, insights, healthInsights, parseHealth, planRest, checkIn, checkInDue, dayWins, weekStreak, mondayOf, navyBodyFat, recomp, fromOpenFoodFacts };
 });
