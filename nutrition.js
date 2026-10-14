@@ -11,7 +11,10 @@
     lose: { label: "Lose fat", proteinPerKg: 2.0, weeklyRate: -0.005 },
     maintain: { label: "Maintain", proteinPerKg: 1.6, weeklyRate: 0 },
     gain: { label: "Build muscle", proteinPerKg: 1.8, weeklyRate: 0.0025 },
+    recomp: { label: "Lose fat & build muscle", proteinPerKg: 2.2, weeklyRate: -0.0025 },
   };
+  // Recomp eats like a gentle cut: a small deficit with lots of protein.
+  const cutLike = (g) => g === "lose" || g === "recomp";
   const MEALS = ["breakfast", "lunch", "dinner", "snacks"];
 
   const r1 = (n) => Math.round(n * 10) / 10;
@@ -99,7 +102,7 @@
     const measured = measuredMaintenance(weights, days, today);
     const estimate = estimatedMaintenance(profile, kg);
     const maintenance = measured ? measured.kcal : estimate;
-    const ratePct = profile.goal === "lose" ? -(profile.ratePct ?? 0.5) / 100 : profile.goal === "gain" ? (profile.ratePct ?? 0.25) / 100 : 0;
+    const ratePct = profile.goal === "lose" ? -(profile.ratePct ?? 0.5) / 100 : profile.goal === "recomp" ? -(profile.ratePct ?? 0.25) / 100 : profile.goal === "gain" ? (profile.ratePct ?? 0.25) / 100 : 0;
     let adjust = (kg * ratePct * KCAL_PER_KG) / 7;
     adjust = Math.max(-750, Math.min(500, adjust));
     const floor = profile.sex === "male" ? 1500 : 1200;
@@ -142,15 +145,15 @@
       const density = (n.p * 4) / n.kcal; // share of calories from protein
       let s = 0;
       if (rem.p > 5) s += 3 * Math.min(n.p, rem.p) / rem.p + 4 * density;
-      if (goal === "lose") s += food.per100.kcal < 150 ? 1 : food.per100.kcal > 400 ? -1.5 : 0;
-      if (goal === "lose" && rem.fibre > 5) s += Math.min(n.fibre, rem.fibre) / 8;
+      if (cutLike(goal)) s += food.per100.kcal < 150 ? 1 : food.per100.kcal > 400 ? -1.5 : 0;
+      if (cutLike(goal) && rem.fibre > 5) s += Math.min(n.fibre, rem.fibre) / 8;
       if (goal === "gain") s += Math.min(n.kcal, rem.kcal) / Math.max(rem.kcal, 300);
       s += h ? Math.log2(1 + h.uses) * 0.6 : 0;
       if (h && meal && h.meals[meal]) s += 0.8 * (h.meals[meal] / h.uses);
       if (days[today]?.entries?.some((e) => e.foodId === food.id)) s -= 1.5; // variety
       const why = [];
       if (density >= 0.35) why.push("very lean");
-      if (goal === "lose" && food.per100.kcal < 150) why.push("filling for the calories");
+      if (cutLike(goal) && food.per100.kcal < 150) why.push("filling for the calories");
       if (n.fibre >= 4) why.push(`${n.fibre}g fibre`);
       if (h && h.uses >= 3) why.push(`you've had it ${h.uses}× lately`);
       if (s > 0) items.push({ food, grams, n, score: s, why });
@@ -180,7 +183,7 @@
         b.kcal += e.kcal; b.p += e.p; b.meals[e.meal] = (b.meals[e.meal] || 0) + 1;
       }
       // Swaps only help when cutting or short on protein; in a bulk, carbs are fuel.
-      const wantSwaps = goal === "lose" || avgP < target.p * 0.9;
+      const wantSwaps = cutLike(goal) || avgP < target.p * 0.9;
       const total = Object.values(by).reduce((a, b) => a + b.kcal, 0) || 1;
       const totalP = Object.values(by).reduce((a, b) => a + b.p, 0) || 1;
       const ranked = Object.entries(by).sort((a, b) => b[1].kcal - a[1].kcal).slice(0, 5);
@@ -206,6 +209,10 @@
         if (pct > -0.15) out.push({ kind: "warn", text: `Trend weight is ${rate >= 0 ? "up" : "down"} ${Math.abs(rate)} kg a week, slower than your target. Cutting about 150 kcal a day, or adding steps, should restart it.` });
         else if (pct < -1) out.push({ kind: "warn", text: `You're losing ${Math.abs(rate)} kg a week, over 1% of body weight. That pace risks muscle loss; eating a little more is fine.` });
         else out.push({ kind: "good", text: `Losing ${Math.abs(rate)} kg a week on trend. That's a sustainable pace that protects muscle.` });
+      } else if (goal === "recomp") {
+        if (pct > 0.15) out.push({ kind: "warn", text: `Trend weight is up ${rate} kg a week. For a recomp it should hold or drift down, so trim about 150 kcal a day.` });
+        else if (pct < -0.75) out.push({ kind: "warn", text: `You're losing ${Math.abs(rate)} kg a week, too fast to build muscle at the same time. Eat about 150 kcal more a day.` });
+        else out.push({ kind: "good", text: `Weight is ${Math.abs(rate) < 0.05 ? "steady" : `${rate < 0 ? "down" : "up"} ${Math.abs(rate)} kg a week`}, right for a recomp. Judge progress by your waist and your lifts, not the scale.` });
       } else if (goal === "gain") {
         if (pct < 0.05) out.push({ kind: "warn", text: `Trend weight is flat or falling (${rate} kg a week). Add about 150 kcal a day to support muscle gain.` });
         else if (pct > 0.5) out.push({ kind: "warn", text: `Gaining ${rate} kg a week, faster than muscle can be built. Trim about 150 kcal a day to limit fat gain.` });
@@ -228,7 +235,7 @@
       const diff = Math.round(stepsNow - stepsBefore);
       const kg = latestWeight(weights) || 75;
       const kcal = Math.round((Math.abs(diff) * 0.04 * kg) / 70 / 10) * 10; // ~0.04 kcal per step at 70 kg
-      if (diff <= -1500) out.push({ kind: "warn", text: `Steps averaged ${Math.round(stepsNow).toLocaleString("en-GB")} this week, down ${Math.abs(diff).toLocaleString("en-GB")} on last week. That's about ${kcal} kcal a day less burned${goal === "lose" ? ", enough to slow a cut" : goal === "gain" ? ", so the same food now gives a bigger surplus" : ""}.` });
+      if (diff <= -1500) out.push({ kind: "warn", text: `Steps averaged ${Math.round(stepsNow).toLocaleString("en-GB")} this week, down ${Math.abs(diff).toLocaleString("en-GB")} on last week. That's about ${kcal} kcal a day less burned${cutLike(goal) ? ", enough to slow fat loss" : goal === "gain" ? ", so the same food now gives a bigger surplus" : ""}.` });
       else if (diff >= 1500) out.push({ kind: "good", text: `Steps are up ${diff.toLocaleString("en-GB")} a day on last week (about ${kcal} kcal more burned).` });
     }
     const sleep = range(14, -1).map(([d, h]) => [d, h.sleepH]).filter(([, x]) => x != null);
@@ -373,6 +380,8 @@
       else if (profile.goal === "lose" && rate < tgt * 1.75) { proposed = current + 150; why = `You're losing ${Math.abs(rate)} kg a week, faster than the ${Math.abs(tgt)} kg target. A little more food protects muscle.`; }
       else if (profile.goal === "gain" && rate < tgt * 0.5) { proposed = current + 150; why = `Weight moved ${rate} kg a week against a +${tgt} kg target.`; }
       else if (profile.goal === "gain" && rate > tgt * 2) { proposed = current - 150; why = `You gained ${rate} kg a week, faster than muscle can be built.`; }
+      else if (profile.goal === "recomp" && rate > 0.1) { proposed = current - 150; why = `Weight went up ${rate} kg a week. A recomp needs a small deficit, so weight should hold or drift down.`; }
+      else if (profile.goal === "recomp" && rate < tgt * 3) { proposed = current + 150; why = `You're losing ${Math.abs(rate)} kg a week. That's too fast to build muscle alongside; a little more food helps your lifts.`; }
       else if (profile.goal === "maintain" && Math.abs(rate) > 0.25) { proposed = current - Math.sign(rate) * 150; why = `Weight moved ${rate} kg a week while maintaining.`; }
     }
     // Change gradually: at most 200 kcal a week.
@@ -383,7 +392,7 @@
       return res;
     }
     // Eating well over target explains a stall better than the target does.
-    if (proposed < current && profile.goal === "lose" && res.avgKcal > current + 150) {
+    if (proposed < current && cutLike(profile.goal) && res.avgKcal > current + 150) {
       res.reason = `You averaged ${res.avgKcal} kcal against a ${current} target. Eat to the current target for another week before lowering it.`;
       return res;
     }
@@ -407,7 +416,7 @@
     const t = totals(entries), logged = entries.length >= 2;
     const band = Math.max(150, target.kcal * 0.1);
     const protein = logged && t.p >= target.p * 0.9;
-    const calories = logged && (goal === "lose" ? t.kcal <= target.kcal + band && t.kcal >= target.kcal - 2 * band : Math.abs(t.kcal - target.kcal) <= band);
+    const calories = logged && (cutLike(goal) ? t.kcal <= target.kcal + band && t.kcal >= target.kcal - 2 * band : Math.abs(t.kcal - target.kcal) <= band);
     const moved = !!trained || (steps != null && steps >= stepGoal);
     const score = [protein, calories, moved].filter(Boolean).length;
     return { protein, calories, moved, score, good: score >= 2, kcal: t.kcal, p: t.p };

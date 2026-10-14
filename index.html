@@ -667,10 +667,11 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   function profileForm(p, submitLabel) {
     const seg = (name, opts, val) => `<div class="seg" data-seg="${name}">${opts.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(val) === String(v)}">${l}</button>`).join("")}</div>`;
     const kgWk = (pct) => { const kg = (p.startWeight || 80) * pct / 100; return p.unit === "lb" ? `${(kg * 2.20462).toFixed(1)} lb` : `${kg.toFixed(1)} kg`; };
-    const rates = p.goal === "gain" ? [[0.25, `Steady · ${kgWk(0.25)}/wk`], [0.5, `Faster · ${kgWk(0.5)}/wk`]] : [[0.25, `Gentle · ${kgWk(0.25)}/wk`], [0.5, `Steady · ${kgWk(0.5)}/wk`], [0.75, `Faster · ${kgWk(0.75)}/wk`]];
+    const rates = p.goal === "recomp" ? [[0.25, `Slow · ${kgWk(0.25)}/wk`], [0.5, `Steady · ${kgWk(0.5)}/wk`]] : p.goal === "gain" ? [[0.25, `Steady · ${kgWk(0.25)}/wk`], [0.5, `Faster · ${kgWk(0.5)}/wk`]] : [[0.25, `Gentle · ${kgWk(0.25)}/wk`], [0.5, `Steady · ${kgWk(0.5)}/wk`], [0.75, `Faster · ${kgWk(0.75)}/wk`]];
     return `<form id="pf" class="card">
       <div class="grid2" style="grid-template-columns:minmax(0,1fr)">
-        <label class="field"><span>Goal</span>${seg("goal", [["lose", "Lose fat"], ["maintain", "Maintain"], ["gain", "Build muscle"]], p.goal)}</label>
+        <label class="field"><span>Goal</span>${seg("goal", [["lose", "Lose fat"], ["gain", "Build muscle"], ["recomp", "Lose fat & build muscle"], ["maintain", "Maintain"]], p.goal)}</label>
+        ${p.goal === "recomp" ? `<p class="muted small" style="margin:-4px 0 0">A small deficit with extra protein. Your weight will move slowly, so Fuel Log judges progress by your waist and your lifts. Works best if you're fairly new to lifting or coming back to it.</p>` : ""}
         ${p.goal !== "maintain" ? `<label class="field"><span>How fast?</span>${seg("ratePct", rates, p.ratePct)}</label>` : ""}
       </div>
       <div class="grid3">
@@ -694,7 +695,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
       if (k === "ratePct") val = Number(val);
       if (k === "unit" && val !== draft.unit) { draft.unit = val; }
       draft[k] = val;
-      if (k === "goal") draft.ratePct = val === "gain" ? 0.25 : 0.5;
+      if (k === "goal") draft.ratePct = val === "gain" || val === "recomp" ? 0.25 : 0.5;
       render();
     }));
     f.addEventListener("submit", (e) => {
@@ -1143,7 +1144,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
         <h2>Your daily targets</h2>
         <div class="preview"><div><b>${t.kcal}</b><span>kcal</span></div><div><b style="color:var(--protein)">${t.p}g</b><span>protein</span></div><div><b style="color:var(--carbs)">${t.c}g</b><span>carbs</span></div><div><b style="color:var(--fat)">${t.f}g</b><span>fat</span></div></div>
         <details class="more"><summary>How these are worked out</summary><p class="small muted" style="margin:8px 0 0">${m ? `Your body burns about <strong>${m.kcal} kcal</strong> a day, measured from ${m.daysLogged} days of your food and weight.${m.kcal < t.estimate * 0.75 ? " That's well below what's typical for you, which usually means some food or drink isn't being logged." : ""}` : `Your body burns about <strong>${t.estimate} kcal</strong> a day, estimated from your details. After two weeks of logging, it switches to what your own data shows.`}
-          ${S.profile.goal === "lose" ? ` Your target aims for ${Math.abs(t.weeklyTargetKg)} kg of fat loss a week.` : S.profile.goal === "gain" ? ` Your target aims for ${t.weeklyTargetKg} kg of gain a week.` : ""} Protein is ${N.GOALS[S.profile.goal].proteinPerKg}g per kg of body weight, to keep and build muscle.
+          ${S.profile.goal === "lose" ? ` Your target aims for ${Math.abs(t.weeklyTargetKg)} kg of fat loss a week.` : S.profile.goal === "recomp" ? ` Your target is a small deficit (about ${Math.abs(t.weeklyTargetKg)} kg a week) so you lose fat while your lifts keep going up. Track your waist weekly: the scale will barely move.` : S.profile.goal === "gain" ? ` Your target aims for ${t.weeklyTargetKg} kg of gain a week.` : ""} Protein is ${N.GOALS[S.profile.goal].proteinPerKg}g per kg of body weight, to keep and build muscle.
           ${!due ? (nextCi != null ? ` Next check-in ${nextCi === 0 ? "today" : nextCi === 1 ? "tomorrow" : `in ${nextCi} days`}.` : " Your first weekly check-in comes after a week of logging.") : ""}</p></details>
       </section>
       <section class="card"><h2>What your log says</h2>${ins.map((i) => `<div class="insight"><span class="ic ${i.kind}" aria-hidden="true">${icon[i.kind]}</span><span>${esc(i.text)}</span></div>`).join("")}</section>

@@ -211,3 +211,23 @@ test("Navy body-fat estimate", () => {
   assert.equal(N.navyBodyFat("male", 180, 90, 40), 18.4);
   assert.equal(N.navyBodyFat("female", 165, 80, 33), null);
 });
+
+test("recomp: small deficit, high protein, steady weight is on track", () => {
+  const today = "2026-10-13";
+  const rp = { ...profile, goal: "recomp", ratePct: 0.25 };
+  const t = N.targets(rp, { "2026-10-01": 85 }, {}, today);
+  assert.equal(t.p, 187); // 2.2 g/kg
+  assert.ok(t.kcal < t.maintenance && t.kcal >= t.maintenance - 260, `kcal ${t.kcal}`);
+  assert.equal(t.weeklyTargetKg, -0.21);
+  const p = { ...rp, kcal: 2300 };
+  const steady = history(today, 10, 300, 85, 0.005);
+  const c = N.checkIn({ profile: p, weights: steady.weights, days: steady.days, today });
+  assert.equal(c.proposed, null);
+  assert.match(c.reason, /on track/);
+  const gaining = history(today, 10, 300, 85, 0.04);
+  assert.equal(N.checkIn({ profile: p, weights: gaining.weights, days: gaining.days, today }).proposed, 2150);
+  const ins = N.insights({ foods, days: steady.days, weights: steady.weights, today, target: t, goal: "recomp" });
+  assert.ok(ins.some((i) => i.kind === "good" && /waist and your lifts/.test(i.text)));
+  const w = N.dayWins({ day: steady.days[N.addDays(today, -1)], target: { ...t, kcal: 2300 }, goal: "recomp", trained: true });
+  assert.ok(w);
+});
