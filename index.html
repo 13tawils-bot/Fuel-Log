@@ -292,6 +292,21 @@ tr.done .stype { background: transparent; }
 .cd.future { color: var(--muted); opacity: 0.5; }
 .cd.gym { background: var(--primary); color: var(--primary-ink); font-weight: 700; }
 .cd.today { box-shadow: inset 0 0 0 2px var(--primary); }
+.cd.str { box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 600; }
+.cal-key { display: flex; gap: 16px; justify-content: center; }
+.cal-key span { display: inline-flex; align-items: center; gap: 6px; }
+.cal-key i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.cal-key .k-gym { background: var(--ink); }
+.cal-key .k-str { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.stretchfull { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.stretchfull .sf-body { display: grid; justify-items: center; align-content: center; gap: 14px; width: 100%; max-width: 520px; min-height: 0; }
+.stretchfull .sf-name { margin: 0; text-align: center; font-size: 2rem; line-height: 1.1; }
+.stretchfull .rf-ring { width: min(62vw, 250px); }
+.stretchfull .rf-ring.prep .rf-fg { stroke: var(--accent); }
+.stretchfull .rf-mid strong { font-size: 3.4rem; }
+.stretchfull .sf-how { margin: 0; text-align: center; font-size: 16px; line-height: 1.45; max-width: 420px; }
+.stretchfull .rf-btns.sf-btns { grid-template-columns: 1fr 1fr 1fr; }
+.stretchfull .rf-min svg { stroke-width: 2; }
 .cd.gym.today { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--primary); }
 .cal-nav { width: 36px; height: 32px; border: 0; border-radius: 10px; background: var(--chalk); color: var(--primary); font-size: 18px; }
 .cal-nav:disabled { opacity: 0.3; }
@@ -447,6 +462,7 @@ table.sets tr.done td { background: color-mix(in srgb, var(--ink) 6%, transparen
 .cd.gym { background: var(--ink); color: var(--primary-ink); font-weight: 600; }
 .cd.today { box-shadow: inset 0 0 0 1.5px var(--accent); }
 .cd.gym.today { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--accent); }
+.cd.str.today { box-shadow: inset 0 0 0 1.5px var(--ink), 0 0 0 2px var(--card), 0 0 0 3.5px var(--accent); }
 .cal-nav { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); border-radius: 999px; }
 .mbar .track b { background: var(--ink) !important; }
 .restbar { border: 1px solid var(--line); border-radius: 26px; background: color-mix(in srgb, var(--card) 88%, transparent); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
@@ -498,6 +514,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
 <script src="nutrition.js"></script>
 <script src="exercises.js"></script>
 <script src="workouts.js"></script>
+<script src="stretch.js"></script>
 <script src="train.js"></script>
 <script src="importers.js"></script>
 <script>
@@ -510,7 +527,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
 
   // ---------- State and storage ----------
   // Saved to your Claude account when this runs as a Claude artifact, otherwise to this browser.
-  const S = { profile: null, weights: {}, foods: {}, days: {}, meals: {}, health: {}, workouts: {}, routines: {}, exercises: {}, photos: {}, measures: {}, active: null };
+  const S = { profile: null, weights: {}, foods: {}, days: {}, meals: {}, health: {}, workouts: {}, routines: {}, exercises: {}, photos: {}, measures: {}, stretches: {}, active: null };
   const COMMON = window.COMMON_FOODS || [];
   const inClaude = !!(window.claude && window.claude.use);
   // The demo page loads example data and never touches your real log.
@@ -526,7 +543,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   function loadLocal() {
     if (DEMO) { Object.assign(S, JSON.parse(JSON.stringify(DEMO))); return; }
     try { Object.assign(S, JSON.parse(localStorage.getItem(LOCAL) || "{}")); } catch (e) {}
-    for (const k of ["meals", "health", "workouts", "routines", "exercises", "photos", "measures"]) S[k] = S[k] || {};
+    for (const k of ["meals", "health", "workouts", "routines", "exercises", "photos", "measures", "stretches"]) S[k] = S[k] || {};
     // The workout in progress is also kept on its own, so a crash or reload never loses sets.
     try { const a = JSON.parse(localStorage.getItem(LOCAL + "-active") || "null"); if (a) S.active = a; } catch (e) {}
   }
@@ -564,6 +581,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     exercise(e) { S.exercises[e.id] = e; if (mode === "db") write(refs.exercises.doc(e.id), e); else saveLocal(); },
     photo(p) { S.photos[p.id] = p; if (mode === "db") write(refs.photos.doc(p.id), p); else saveLocal(); },
     measure(date, m) { if (m) S.measures[date] = m; else delete S.measures[date]; if (mode === "db") write(refs.measures.doc(date), m ? { date, ...m } : null); else saveLocal(); },
+    stretch(s) { S.stretches[s.id] = s; if (mode === "db") write(refs.stretches.doc(s.id), s); else saveLocal(); },
     dropPhoto(id) { delete S.photos[id]; if (mode === "db") write(refs.photos.doc(id), null); else saveLocal(); },
     active(a) {
       S.active = a;
@@ -585,12 +603,12 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     if (db && id) {
       const base = db.doc("data/users/" + id + "/profile");
       refs = { profile: base, weights: base.collection("weights"), foods: base.collection("foods"), days: base.collection("days"), meals: base.collection("meals"), health: base.collection("health"),
-        workouts: base.collection("workouts"), routines: base.collection("routines"), exercises: base.collection("exercises"), photos: base.collection("photos"), measures: base.collection("measures"), active: base.collection("state").doc("active") };
+        workouts: base.collection("workouts"), routines: base.collection("routines"), exercises: base.collection("exercises"), photos: base.collection("photos"), measures: base.collection("measures"), stretches: base.collection("stretches"), active: base.collection("state").doc("active") };
       mode = "db";
       const localActive = S.active;
-      S.profile = null; S.weights = {}; S.foods = {}; S.days = {}; S.meals = {}; S.health = {}; S.workouts = {}; S.routines = {}; S.exercises = {}; S.photos = {}; S.measures = {};
+      S.profile = null; S.weights = {}; S.foods = {}; S.days = {}; S.meals = {}; S.health = {}; S.workouts = {}; S.routines = {}; S.exercises = {}; S.photos = {}; S.measures = {}; S.stretches = {};
       const ready = new Set();
-      const got = (k) => { ready.add(k); if (ready.size >= 12) { booting = false; render(); } };
+      const got = (k) => { ready.add(k); if (ready.size >= 13) { booting = false; render(); } };
       const fail = (e) => { if (e && e.code !== "unavailable") flash("Lost connection to your saved data. Reload to reconnect."); };
       base.onSnapshot((s) => { S.profile = s.exists ? s.data() : null; got("p"); }, fail);
       refs.weights.onSnapshot((q) => { S.weights = Object.fromEntries(q.docs.map((d) => [d.id, d.data().kg])); got("w"); }, fail);
@@ -602,6 +620,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
       refs.routines.onSnapshot((q) => { S.routines = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ro"); }, fail);
       refs.exercises.onSnapshot((q) => { S.exercises = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ex"); }, fail);
       refs.measures.onSnapshot((q) => { S.measures = Object.fromEntries(q.docs.map((d) => { const { date, ...m } = d.data(); return [d.id, m]; })); got("ms"); }, fail);
+      refs.stretches.orderBy("start", "desc").limit(400).onSnapshot((q) => { S.stretches = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("st"); }, fail);
       refs.photos.onSnapshot((q) => { S.photos = Object.fromEntries(q.docs.map((d) => [d.id, d.data()])); got("ph"); }, fail);
       // The workout in progress is read once; this device's copy wins if it's newer.
       refs.active.get().then((d) => { const remote = d.exists ? d.data().workout : null; S.active = localActive && (!remote || localActive.start >= remote.start) ? localActive : remote; }, () => { S.active = localActive; }).then(() => got("ac"));
@@ -861,6 +880,10 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     if (nu && !T.trainedOn(today()) && hour >= 5 && hour < 22) {
       rows.push(`<div class="nu-row"><span class="nu-ic"><svg viewBox="0 0 24 24"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg></span><div class="nu-txt"><strong>${nu.name ? "Train: " + esc(nu.name) : "Time to train?"}</strong><span>${nu.name ? `Next in your programme · about ${nu.mins} min` : "Pick a routine and go"}</span></div><button class="btn small" type="button" id="nu-train">Start</button></div>`);
     }
+    const cool = !S.active && ST.pendingCooldown();
+    if (cool && Date.now() - (cool.w.end || cool.w.start) < 6 * 3600000) {
+      rows.push(`<div class="nu-row"><span class="nu-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="4.5" r="1.8"/><path d="M12 7v6M12 13l-4 7M12 13l4 7M5 9.5l7-1 7 1"/></svg></span><div class="nu-txt"><strong>Cool down</strong><span>${cool.mins} min of stretches for today's ${esc(cool.w.name)}</span></div><button class="btn small" type="button" id="nu-stretch">Start</button></div>`);
+    }
     const protLeft = Math.round(t.p - N.totals(day.entries).p);
     if (hour >= 16 && protLeft > 20 && lastSuggestions.length) {
       const it = lastSuggestions[0];
@@ -882,6 +905,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     $("#view").querySelectorAll("[data-addmeal]").forEach((b) => (b.onclick = () => openSheet({ meal: b.dataset.addmeal })));
     const nuU = $("#nu-usual"); if (nuU) nuU.onclick = () => { logMany(lastUsual); flash("Logged your usual.", "good"); };
     const nuB = $("#nu-backup"); if (nuB) nuB.onclick = () => { tab = "me"; meSub = "backup"; render(); window.scrollTo(0, 0); };
+    const nuS = $("#nu-stretch"); if (nuS) nuS.onclick = () => { const c = ST.pendingCooldown(); if (c) ST.startCooldown(c.w); };
     const nuT = $("#nu-train"); if (nuT) nuT.onclick = () => { const n = T.nextUp(); if (n) n.start(); };
     $("#view").querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => {
       const day = { ...(S.days[viewDate] || {}), entries: (S.days[viewDate]?.entries || []).slice() };
@@ -1282,7 +1306,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
   const ageText = (d) => (d == null ? "Not saved yet" : d === 0 ? "Saved today" : d === 1 ? "Saved yesterday" : `Saved ${d} days ago`);
   function backupData() {
     return { app: "fuel-log", v: 4, saved: new Date().toISOString(), profile: S.profile, weights: S.weights, foods: S.foods, days: S.days, meals: S.meals, health: S.health,
-      workouts: S.workouts, routines: S.routines, exercises: S.exercises, measures: S.measures, photos: S.photos };
+      workouts: S.workouts, routines: S.routines, exercises: S.exercises, measures: S.measures, stretches: S.stretches, photos: S.photos };
   }
   async function restoreData(b, includePhotos, progress) {
     if (!b || b.app !== "fuel-log") throw new Error("That isn't a Fuel Log backup file.");
@@ -1290,7 +1314,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     const list = [];
     const add = (c, obj, map = (v) => v) => { for (const [id, v] of Object.entries(obj || {})) list.push([c, id, map(v)]); };
     add("weights", b.weights); add("foods", b.foods); add("days", b.days); add("meals", b.meals); add("health", b.health);
-    add("workouts", b.workouts); add("routines", b.routines); add("exercises", b.exercises); add("measures", b.measures);
+    add("workouts", b.workouts); add("routines", b.routines); add("exercises", b.exercises); add("measures", b.measures); add("stretches", b.stretches);
     await bulkSave(list, progress);
     const photos = includePhotos && b.photoData ? await T.importPhotos(b.photos, b.photoData) : 0;
     return { records: list.length, photos };
@@ -1784,7 +1808,11 @@ weight: [Weight]</pre></li>
     sh.step = "form"; drawSheet();
   }
 
-  const T = window.TrainUI({
+  const ST = window.StretchUI({
+    S, store, esc, flash, uid, today, render: () => render(), sheet: showSheet, closeSheet: () => { if (dlg.open) dlg.close(); },
+    exDef: (id) => T.exIndex()[id] || { primary: "full body", secondary: [] },
+  });
+  const T = window.TrainUI({ stretch: ST,
     S, store, $, esc, flash, uid, today, iso: N.iso, daysBetween: N.daysBetween, unit, fmtW,
     render: () => render(), go: (t) => { tab = t; render(); }, tab: () => tab,
     sheet: showSheet, closeSheet: () => { if (dlg.open) dlg.close(); },

@@ -367,7 +367,9 @@
           const fmt = (v, m) => (m === "volume" ? fmtVol(v) : m === "sec" ? secOut(v) : m === "km" ? v.toFixed(2) + " km" : v + " reps");
           return `<div class="row spread small" style="padding:4px 0;flex-wrap:nowrap"><span style="min-width:0">${esc(def.name)}</span><span class="num ${c && c.pct > 0 ? "up" : c && c.pct < 0 ? "down" : "muted"}" style="white-space:nowrap">${!c ? "First time" : c.pct == null ? "–" : `${c.pct > 0 ? "▲ +" : c.pct < 0 ? "▼ " : "= "}${c.pct}% · ${fmt(c.now[c.metric], c.metric)}`}</span></div>`; }).join("")}</div>
         <p class="small muted" style="margin:0">Workout ${count}. ${w.routineId || w.programme ? "" : "Save it as a routine to repeat it with one tap."}</p>
-        <div class="row">${w.routineId || w.programme ? "" : `<button class="btn ghost" type="button" id="as-routine">Save as routine</button>`}<button class="btn" type="button" data-close style="flex:1">Done</button></div>`, (el) => {
+        <button class="btn wide" type="button" id="cooldown">Cool-down stretch · ${app.stretch.cooldownMinutes(w)} min</button>
+        <div class="row">${w.routineId || w.programme ? "" : `<button class="btn ghost" type="button" id="as-routine">Save as routine</button>`}<button class="btn ghost" type="button" data-close style="flex:1">Done</button></div>`, (el) => {
+        el.querySelector("#cooldown").onclick = () => app.stretch.startCooldown(w);
         const r = el.querySelector("#as-routine");
         if (r) r.onclick = () => { routineFromWorkout(w); app.closeSheet(); flash(`Saved "${w.name}" as a routine.`, "good"); app.render(); };
       });
@@ -536,6 +538,7 @@
       calMonth = calMonth || [now.getFullYear(), now.getMonth()];
       const [y, m] = calMonth;
       const cal = W.calendarMonth(S.workouts, y, m);
+      const stretched = app.stretch.datesIn(y, m);
       const first = new Date(y, m, 1), daysIn = new Date(y, m + 1, 0).getDate(), lead = (first.getDay() + 6) % 7;
       const isThisMonth = y === now.getFullYear() && m === now.getMonth();
       const cells = [];
@@ -544,12 +547,13 @@
         const ws = cal.days[d], isToday = isThisMonth && d === now.getDate();
         const future = new Date(y, m, d) > now;
         cells.push(ws ? `<button type="button" class="cd gym ${isToday ? "today" : ""}" data-calday="${d}" aria-label="${d}: ${ws.length} workout${ws.length > 1 ? "s" : ""}">${d}</button>`
-          : `<span class="cd ${isToday ? "today" : ""} ${future ? "future" : ""}">${d}</span>`);
+          : `<span class="cd ${isToday ? "today" : ""} ${future ? "future" : ""} ${stretched.has(d) ? "str" : ""}" ${stretched.has(d) ? `aria-label="${d}: stretched"` : ""}>${d}</span>`);
       }
       const label = first.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
       return `<section class="card">
         <div class="row spread"><button class="cal-nav" type="button" data-calmove="-1" aria-label="Previous month">‹</button><h2 style="flex:1;text-align:center">${label}</h2><button class="cal-nav" type="button" data-calmove="1" aria-label="Next month" ${isThisMonth ? "disabled" : ""}>›</button></div>
         <div class="cal"><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b><b>S</b>${cells.join("")}</div>
+        ${stretched.size ? `<div class="cal-key small muted"><span><i class="k-gym"></i>Gym</span><span><i class="k-str"></i>Stretch only</span></div>` : ""}
         <div class="cal-stats"><div><b>${cal.gymDays}</b><span>gym days</span></div><div><b>${fmtDur(cal.totalMin)}</b><span>total time</span></div><div><b>${cal.sessions ? fmtDur(cal.avgMin) : "–"}</b><span>avg session</span></div></div>
       </section>`;
     }
@@ -588,13 +592,14 @@
           <div class="row" style="flex-wrap:nowrap"><button class="btn ghost" type="button" id="tr-empty" style="flex:1">+ Empty workout</button><button class="btn ghost" type="button" id="rt-new" style="flex:1">+ New routine</button></div>
           ${S.profile && S.profile.programme === false ? `<button class="link small" type="button" id="prog-show" style="justify-self:start">Try a ready-made programme</button>` : ""}
         </section>
+        ${app.stretch.card()}
         ${calendarCard()}
       </div>`;
     }
     function bindHome() {
       const v = $("#view");
       $("#tr-empty").onclick = () => startWorkout({});
-      bindProgramme(); bindCalendar();
+      bindProgramme(); bindCalendar(); app.stretch.bind();
       const ps = $("#prog-show"); if (ps) ps.onclick = () => { store.profile({ ...S.profile, programme: null }); app.render(); };
       $("#rt-new").onclick = () => routineEditor(null);
       v.querySelectorAll("[data-rtedit]").forEach((b) => (b.onclick = () => routineEditor(S.routines[b.dataset.rtedit])));

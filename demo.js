@@ -103,6 +103,10 @@
     weights, foods, days, health, workouts, routines,
     meals: { "m-demo-1": { id: "m-demo-1", name: "Usual breakfast", meal: "breakfast", items: breakfasts[0]().map((x) => ({ foodId: x.foodId, name: x.name, grams: x.grams, per100: foods[x.foodId].per100 })) } },
     exercises: {}, photos: {},
+    stretches: Object.fromEntries([[25, "Hips & lower back", "back", 8], [18, "Morning wake-up", "morning", 5], [11, "Hips & lower back", "back", 7], [6, "Cool-down", "cool", 6], [4, "Morning wake-up", "morning", 5]].map(([ago, name, kind, mins], n) => {
+      const start = new Date(N.addDays(today, -ago) + "T08:10:00").getTime();
+      return ["st-demo-" + n, { id: "st-demo-" + n, date: N.addDays(today, -ago), start, end: start + mins * 60000, name, kind, mins, stretches: 6 }];
+    })),
     measures: { [N.addDays(today, -28)]: { waist: 86.8, neck: 39 }, [N.addDays(today, -21)]: { waist: 86.6, neck: 39 }, [N.addDays(today, -14)]: { waist: 86.5, neck: 39 }, [N.addDays(today, -7)]: { waist: 86.4, neck: 39.2 } },
   };
 })();
