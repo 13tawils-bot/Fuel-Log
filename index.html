@@ -1485,8 +1485,8 @@ weight: [Weight]</pre></li>
         <input type="search" id="sh-q" placeholder="Search, e.g. chicken, banana, rice" value="${esc(sh.q)}" aria-label="Search foods" enterkeyhint="search">
         <div class="quick-add">
           ${liveScanOk ? `<button class="qa" type="button" id="live">${IC.scan}<span>Scan</span></button>` : `<label class="qa">${IC.scan}<span>Scan</span><input type="file" id="bc-file" accept="image/*" capture="environment"></label>`}
-          ${aiImages() ? `<label class="qa">${IC.cam}<span>Meal photo</span><input type="file" id="meal-file" accept="image/*"></label>` : ""}
-          ${aiImages() ? `<label class="qa">${IC.label}<span>Label</span><input type="file" id="lbl-file" accept="image/*" capture="environment"></label>` : ""}
+          ${aiImages() ? `<label class="qa">${IC.cam}<span>Meal photo</span><input type="file" id="meal-file" accept="image/*"></label>` : `<button class="qa" type="button" data-needkey>${IC.cam}<span>Meal photo</span></button>`}
+          ${aiImages() ? `<label class="qa">${IC.label}<span>Label</span><input type="file" id="lbl-file" accept="image/*" capture="environment"></label>` : `<button class="qa" type="button" data-needkey>${IC.label}<span>Label</span></button>`}
           <button class="qa" type="button" id="manual">${IC.pen}<span>Manual</span></button>
         </div>
         ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}
@@ -1499,6 +1499,7 @@ weight: [Weight]</pre></li>
         </div>`;
       const bf = $("#bc-file"); if (bf) bf.onchange = (e) => e.target.files[0] && handleBarcodePhoto(e.target.files[0]);
       const lv = $("#live"); if (lv) lv.onclick = () => { sh.step = "camera"; drawSheet(); };
+      el.querySelectorAll("[data-needkey]").forEach((b) => (b.onclick = () => { sh.step = "needkey"; sh.status = null; drawSheet(); }));
       const mf = $("#meal-file"); if (mf) mf.onchange = (e) => e.target.files[0] && readMeal(e.target.files[0]);
       const lf = $("#lbl-file"); if (lf) lf.onchange = (e) => e.target.files[0] && readLabel(e.target.files[0], blankFood());
       $("#manual").onclick = () => { sh.step = "form"; sh.food = blankFood(); drawSheet(); };
@@ -1516,6 +1517,21 @@ weight: [Weight]</pre></li>
       $("#tbc").onsubmit = (e) => { e.preventDefault(); const v = $("#tbc-v").value.replace(/\D/g, ""); if (v.length >= 8) lookupBarcode(v); };
       $("#back").onclick = () => { sh.step = "choose"; drawSheet(); };
       $("#tbc-v").focus();
+    } else if (sh.step === "needkey") {
+      el.innerHTML = head("Meal photos") + `
+        <p class="small" style="margin:0">Snap your plate and Claude estimates each food, its portion and the calories and protein. You check the grams, then log it in one tap. It reads nutrition labels the same way.</p>
+        <p class="small muted" style="margin:0">To switch it on, paste an Anthropic API key once. It stays on this phone and is never included in backups. Each photo costs a few pence at most on your Anthropic bill.</p>
+        <ol class="steps small"><li>Go to <strong>console.anthropic.com</strong> and sign in.</li><li>Add a few pounds of credit under <strong>Billing</strong>.</li><li>Open <strong>API keys</strong>, tap <strong>Create key</strong>, copy it.</li><li>Paste it below.</li></ol>
+        <div class="row" style="flex-wrap:nowrap"><input type="text" id="nk-in" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Anthropic API key" style="flex:1"><button class="btn small" type="button" id="nk-save">Turn on</button></div>
+        ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}
+        <button class="link" type="button" id="back">Back</button>`;
+      $("#back").onclick = () => { sh.step = "choose"; sh.status = null; drawSheet(); };
+      $("#nk-save").onclick = () => {
+        const v = $("#nk-in").value.trim();
+        if (!/^sk-ant-/.test(v)) { sh.status = "That doesn't look like an Anthropic API key. It starts with sk-ant-."; sh.statusKind = "warn"; drawSheet(); return; }
+        try { localStorage.setItem(AI_KEY, v); } catch (e) {}
+        sh.step = "choose"; sh.status = "Meal photos are on. Tap Meal photo and snap your plate."; sh.statusKind = "good"; drawSheet();
+      };
     } else if (sh.step === "plate") {
       const tot = { kcal: 0, p: 0 };
       for (const it of sh.plate) if (it.on) { const n = N.portion(it, it.grams); tot.kcal += n.kcal; tot.p += n.p; }
