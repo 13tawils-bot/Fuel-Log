@@ -231,3 +231,12 @@ test("recomp: small deficit, high protein, steady weight is on track", () => {
   const w = N.dayWins({ day: steady.days[N.addDays(today, -1)], target: { ...t, kcal: 2300 }, goal: "recomp", trained: true });
   assert.ok(w);
 });
+
+test("health text dates: Shortcuts formats, and no date means you choose", () => {
+  const p = (d) => N.parseHealth(`Fuel Log\nsteps: 9000\ndate: ${d}`, null).date;
+  assert.equal(p("16 Oct 2026 at 08:12"), "2026-10-16");
+  assert.equal(p("October 5, 2026"), "2026-10-05");
+  assert.equal(p("3rd September 2026"), "2026-09-03");
+  assert.equal(p("16/10/2026, 08:12"), "2026-10-16");
+  assert.equal(N.parseHealth("Fuel Log\nsteps: 9000", null).date, null);
+});

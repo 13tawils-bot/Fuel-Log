@@ -293,6 +293,8 @@ tr.done .stype { background: transparent; }
 .cd.gym { background: var(--primary); color: var(--primary-ink); font-weight: 700; }
 .cd.today { box-shadow: inset 0 0 0 2px var(--primary); }
 .cd.str { box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 600; }
+.hd-pick { position: relative; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); display: inline-flex; align-items: center; }
+.hd-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; }
 .cal-key { display: flex; gap: 16px; justify-content: center; }
 .cal-key span { display: inline-flex; align-items: center; gap: 6px; }
 .cal-key i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -1301,6 +1303,7 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
     };
   }
   const LAST_BACKUP = "fuel-log-last-backup";
+  const HEALTH_DAY = "fuel-log-health-day"; // how many days back you usually paste for
   const lastBackup = () => { try { return Number(localStorage.getItem(LAST_BACKUP)) || 0; } catch (e) { return 0; } };
   const backupAge = () => { const t = lastBackup(); return t ? Math.floor((Date.now() - t) / 86400000) : null; };
   const ageText = (d) => (d == null ? "Not saved yet" : d === 0 ? "Saved today" : d === 1 ? "Saved yesterday" : `Saved ${d} days ago`);
@@ -1356,7 +1359,8 @@ ol.steps code { font-size: 12.5px; background: var(--chalk); padding: 1px 5px; b
 steps: [Steps]
 active: [Active]
 sleep: [Sleep]
-weight: [Weight]</pre></li>
+weight: [Weight]
+date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the right day for you, even if you paste the next morning.</li>
         <li>Add <strong>Copy to Clipboard</strong>. Run it, then tap <strong>Import</strong> here.</li>
         <li>Tip: in the Automation tab, run it daily at a fixed time, or add it to your home screen next to Fuel Log.</li>
       </ol></details>
@@ -1595,19 +1599,45 @@ weight: [Weight]</pre></li>
         ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}`;
       $("#h-file").onclick = () => { dlg.close(); tab = "me"; meSub = "health"; render(); window.scrollTo(0, 0); };
       const apply = (text) => {
-        const h = N.parseHealth(text, today());
+        const h = N.parseHealth(text, null);
         if (!h) { sh.status = "That doesn't look like the shortcut's text. It should start with a line saying Fuel Log."; sh.statusKind = "warn"; drawSheet(); return; }
-        const { date, weight, ...rest } = h;
-        store.health(date, { ...(S.health[date] || {}), ...rest });
-        if (weight) store.weight(date, weight);
-        dlg.close(); render();
-        flash(`Imported ${[rest.steps != null && "steps", rest.active != null && "active calories", rest.sleepH != null && "sleep", weight && "weight"].filter(Boolean).join(", ")} for ${date === today() ? "today" : date}.`, "good");
+        // A date in the text wins; otherwise use the day you picked last time (today, yesterday...).
+        let off = 0; try { off = Number(localStorage.getItem(HEALTH_DAY)) || 0; } catch (e) {}
+        sh.healthData = h; sh.healthDay = h.date || N.addDays(today(), -off); sh.healthFromText = !!h.date;
+        sh.step = "healthday"; sh.status = null; drawSheet();
       };
       const ta = $("#h-text");
       ta.addEventListener("paste", (e) => { const t = e.clipboardData && e.clipboardData.getData("text"); if (t) { e.preventDefault(); apply(t); } });
       ta.addEventListener("change", () => ta.value && apply(ta.value));
       const cb = $("#h-clip");
       if (cb) cb.onclick = () => { try { navigator.clipboard.readText().then(apply, () => { sh.status = "Couldn't read the clipboard. Long-press the box below and choose Paste."; sh.statusKind = "warn"; drawSheet(); }); } catch (e) { ta.focus(); } };
+    } else if (sh.step === "healthday") {
+      const h = sh.healthData, d = sh.healthDay, have = S.health[d] || {};
+      const dayName = (x) => x === today() ? "Today" : x === N.addDays(today(), -1) ? "Yesterday" : new Date(x + "T12:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+      const opts = [0, 1, 2].map((k) => N.addDays(today(), -k));
+      const fmtSleep = (x) => `${Math.floor(x)}h ${String(Math.round((x % 1) * 60)).padStart(2, "0")}m`;
+      const rows = [
+        h.steps != null && ["Steps", h.steps.toLocaleString("en-GB"), have.steps != null && have.steps.toLocaleString("en-GB")],
+        h.active != null && ["Active calories", h.active + " kcal", have.active != null && have.active + " kcal"],
+        h.sleepH != null && ["Sleep", fmtSleep(h.sleepH), have.sleepH != null && fmtSleep(have.sleepH)],
+        h.weight && ["Weight", fmtW(h.weight) + " " + unit(), S.weights[d] != null && fmtW(S.weights[d]) + " " + unit()],
+      ].filter(Boolean);
+      el.innerHTML = head("Which day is this?") + `
+        <div class="seg" role="group" aria-label="Day">${opts.map((x) => `<button type="button" data-hday="${x}" aria-pressed="${x === d}">${dayName(x)}</button>`).join("")}
+          <label class="hd-pick"><span>${opts.includes(d) ? "Other day" : dayName(d)}</span><input type="date" id="hd-date" max="${today()}" value="${d}" aria-label="Pick a date"></label></div>
+        ${sh.healthFromText ? `<p class="small muted" style="margin:0">The shortcut said this is for ${dayName(h.date).toLowerCase() === "today" ? "today" : dayName(h.date)}.</p>` : ""}
+        <div>${rows.map(([k, v, old]) => `<div class="row spread small" style="padding:7px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><span>${k}</span><span class="num"><strong>${esc(v)}</strong>${old ? ` <span class="muted">replaces ${esc(old)}</span>` : ""}</span></div>`).join("")}</div>
+        <button class="btn wide" type="button" id="hd-save">Save for ${dayName(d) === "Today" || dayName(d) === "Yesterday" ? dayName(d).toLowerCase() : dayName(d)}</button>`;
+      el.querySelectorAll("[data-hday]").forEach((b) => (b.onclick = () => { sh.healthDay = b.dataset.hday; drawSheet(); }));
+      $("#hd-date").onchange = (e) => { const v = e.target.value; if (v && v <= today()) { sh.healthDay = v; drawSheet(); } };
+      $("#hd-save").onclick = () => {
+        const { date: _, weight, ...rest } = h;
+        store.health(d, { ...(S.health[d] || {}), ...rest });
+        if (weight) store.weight(d, weight);
+        if (!sh.healthFromText) { try { localStorage.setItem(HEALTH_DAY, String(N.daysBetween(d, today()))); } catch (e) {} }
+        dlg.close(); render();
+        flash(`Saved ${[rest.steps != null && "steps", rest.active != null && "active calories", rest.sleepH != null && "sleep", weight && "weight"].filter(Boolean).join(", ")} for ${dayName(d) === "Today" || dayName(d) === "Yesterday" ? dayName(d).toLowerCase() : dayName(d)}.`, "good");
+      };
     } else if (sh.step === "busy") {
       el.innerHTML = head("Add food") + `<div class="status" role="status">${esc(sh.status)}</div>`;
     } else if (sh.step === "form") {

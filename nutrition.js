@@ -268,8 +268,14 @@
     if (d) {
       const iso = d.match(/\d{4}-\d{2}-\d{2}/);
       const uk = d.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      // Shortcuts writes dates like "16 Oct 2026 at 08:12" or "October 16, 2026".
+      const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+      const dm = d.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3})[a-z]*\.?,?\s+(\d{4})/i), md = d.match(/\b([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/i);
+      const named = (day, mon, y) => { const k = MON.indexOf(mon.toLowerCase()); return k < 0 ? null : `${y}-${String(k + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`; };
       if (iso) out.date = iso[0];
       else if (uk) out.date = `${uk[3]}-${uk[2].padStart(2, "0")}-${uk[1].padStart(2, "0")}`;
+      else if (dm && named(dm[1], dm[2], dm[3])) out.date = named(dm[1], dm[2], dm[3]);
+      else if (md && named(md[2], md[1], md[3])) out.date = named(md[2], md[1], md[3]);
     }
     const steps = num(get("steps")); if (steps != null) out.steps = Math.round(steps);
     const active = num(get("active")); if (active != null) out.active = Math.round(/kj/i.test(get("active")) ? active / 4.184 : active);
