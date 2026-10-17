@@ -295,6 +295,8 @@ tr.done .stype { background: transparent; }
 .cd.str { box-shadow: inset 0 0 0 1.5px var(--ink); font-weight: 600; }
 .hd-pick { position: relative; border-radius: 999px; padding: 7px 13px; font-size: 14px; font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); display: inline-flex; align-items: center; }
 .hd-pick input { position: absolute; inset: 0; opacity: 0; width: 100%; }
+.chips.chains { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 8px; }
+.chips.chains button { border: 0; border-radius: 999px; padding: 7px 12px; font-size: 13.5px; color: var(--ink); }
 .cal-key { display: flex; gap: 16px; justify-content: center; }
 .cal-key span { display: inline-flex; align-items: center; gap: 6px; }
 .cal-key i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
@@ -1522,11 +1524,17 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
           ${meals.length ? `<div class="tag">Saved meals</div>` + meals.map(mealRow).join("") : ""}
           ${list.length ? `<div class="tag">${q ? "Your foods" : "Recent"}</div>` + list.map((f) => foodRow(f, "data-pick")).join("") : ""}
           ${common.length ? `<div class="tag">Common foods · typical UK values</div>` + common.map((f) => foodRow(f, "data-common")).join("") : ""}
-          ${!meals.length && !list.length && !common.length ? `<p class="empty">${q ? `Nothing found for "${esc(sh.q)}". Try a simpler word, or tap Manual.` : "Type what you ate, like chicken, eggs or rice. Foods you log show up here next time for one-tap logging."}</p>` : ""}
+          ${!meals.length && !list.length && !common.length ? `<p class="empty">${q ? `Nothing saved matches "${esc(sh.q)}" yet. Look it up online below.` : "Type what you ate, like chicken, eggs or rice. Foods you log show up here next time for one-tap logging."}</p>` : ""}
+          ${q.length >= 2 ? `<div class="tag">Look it up online</div>
+            <button type="button" class="result" ${aiText() ? 'data-online="menu"' : "data-needkey"}><span>Restaurant or takeaway<br><span class="small muted">"${esc(sh.q.trim())}" · menu items with calories</span></span><span class="small muted">›</span></button>
+            <button type="button" class="result" data-online="off"><span>Packaged product<br><span class="small muted">Search Open Food Facts</span></span><span class="small muted">›</span></button>` : ""}
+          ${!q ? `<div class="tag">Eating out</div><div class="chips chains">${CHAINS.map((c) => `<button type="button" ${aiText() ? `data-chain="${esc(c)}"` : "data-needkey"}>${esc(c)}</button>`).join("")}</div>` : ""}
           ${liveScanOk && !q ? `<div class="row" style="padding-top:8px;gap:14px"><label class="link small" style="position:relative">Barcode photo<input type="file" id="bc-file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0"></label><button class="link small" type="button" id="typebc">Type a barcode</button></div>` : !q ? `<button class="link small" type="button" id="typebc" style="justify-self:start;padding-top:8px">Type a barcode</button>` : ""}
         </div>`;
       const bf = $("#bc-file"); if (bf) bf.onchange = (e) => e.target.files[0] && handleBarcodePhoto(e.target.files[0]);
       const lv = $("#live"); if (lv) lv.onclick = () => { sh.step = "camera"; drawSheet(); };
+      el.querySelectorAll("[data-online]").forEach((b) => (b.onclick = () => (b.dataset.online === "menu" ? lookupMenu(sh.q.trim()) : searchProducts(sh.q.trim()))));
+      el.querySelectorAll("[data-chain]").forEach((b) => (b.onclick = () => lookupMenu(b.dataset.chain, true)));
       el.querySelectorAll("[data-needkey]").forEach((b) => (b.onclick = () => { sh.step = "needkey"; sh.status = null; drawSheet(); }));
       const mf = $("#meal-file"); if (mf) mf.onchange = (e) => e.target.files[0] && readMeal(e.target.files[0]);
       const lf = $("#lbl-file"); if (lf) lf.onchange = (e) => e.target.files[0] && readLabel(e.target.files[0], blankFood());
@@ -1545,6 +1553,13 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
       $("#tbc").onsubmit = (e) => { e.preventDefault(); const v = $("#tbc-v").value.replace(/\D/g, ""); if (v.length >= 8) lookupBarcode(v); };
       $("#back").onclick = () => { sh.step = "choose"; drawSheet(); };
       $("#tbc-v").focus();
+    } else if (sh.step === "products") {
+      el.innerHTML = head("Packaged products") + `
+        <div class="results" style="max-height:60vh">${sh.products.map((f, k) => `<button type="button" class="result" data-prod="${k}"><span>${esc(f.name)}${f.brand ? ` <span class="muted small">${esc(f.brand)}</span>` : ""}</span><span class="small muted num">${f.per100.kcal}/100g</span></button>`).join("")}</div>
+        <p class="small muted" style="margin:0">From Open Food Facts, a free database anyone can add to, so check the numbers look right.</p>
+        <button class="link" type="button" id="back">Back</button>`;
+      $("#back").onclick = () => { sh.step = "choose"; drawSheet(); };
+      el.querySelectorAll("[data-prod]").forEach((b) => (b.onclick = () => { sh.food = sh.products[Number(b.dataset.prod)]; sh.step = "portion"; drawSheet(); }));
     } else if (sh.step === "needkey") {
       el.innerHTML = head("Meal photos") + `
         <p class="small" style="margin:0">Snap your plate and Claude estimates each food, its portion and the calories and protein. You check the grams, then log it in one tap. It reads nutrition labels the same way.</p>
@@ -1563,11 +1578,11 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
     } else if (sh.step === "plate") {
       const tot = { kcal: 0, p: 0 };
       for (const it of sh.plate) if (it.on) { const n = N.portion(it, it.grams); tot.kcal += n.kcal; tot.p += n.p; }
-      el.innerHTML = head("Check your meal") + `
-        <p class="small muted" style="margin:0">Claude's estimate from the photo. Adjust the grams if anything looks off, untick what you didn't eat.${sh.plateNote ? " " + esc(sh.plateNote) : ""}</p>
+      el.innerHTML = head(sh.plateTitle || "Check your meal") + `
+        <p class="small muted" style="margin:0">${sh.plateIntro || "Claude's estimate from the photo. Adjust the grams if anything looks off, untick what you didn't eat."}${sh.plateNote ? " " + esc(sh.plateNote) : ""}</p>
         <div class="results" style="max-height:46vh">${sh.plate.map((it, k) => { const n = N.portion(it, it.grams); return `<div class="entry" style="grid-template-columns:auto minmax(0,1fr) 5.2rem">
           <input type="checkbox" data-pon="${k}" ${it.on ? "checked" : ""} aria-label="Include ${esc(it.name)}" style="width:22px;height:22px;accent-color:var(--primary)">
-          <div><div class="nm">${esc(it.name)}</div><div class="sub">${n.kcal} kcal · ${n.p}g protein</div></div>
+          <div><div class="nm">${esc(it.name)}${it.brand ? ` <span class="muted small">${esc(it.brand)}</span>` : ""}</div><div class="sub">${it.serving ? esc(it.serving) + " · " : ""}${n.kcal} kcal · ${n.p}g protein</div></div>
           <input type="number" inputmode="numeric" data-pg="${k}" value="${it.grams}" aria-label="Grams of ${esc(it.name)}" style="text-align:center"></div>`; }).join("")}</div>
         <div class="row spread"><strong class="num">${Math.round(tot.kcal)} kcal · ${Math.round(tot.p)}g protein</strong>
           <select id="plate-meal" style="width:auto">${N.MEALS.map((m) => `<option value="${m}" ${m === sh.meal ? "selected" : ""}>${m[0].toUpperCase() + m.slice(1)}</option>`).join("")}</select></div>
@@ -1578,11 +1593,12 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
       $("#plate-log").onclick = () => {
         const slug = (t) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
         const list = sh.plate.filter((x) => x.on).map((it) => {
-          const id = "ai-" + slug(it.name);
-          const food = S.foods[id] && S.foods[id].source !== "photo estimate" ? S.foods[id] : { id, name: it.name, brand: "", barcode: "", per100: it.per100, servingG: it.grams, source: "photo estimate" };
+          const src = it.source || "photo estimate";
+          const id = (src === "restaurant" ? "r-" + slug((it.brand ? it.brand + " " : "") + it.name) : "ai-" + slug(it.name));
+          const food = S.foods[id] && S.foods[id].source !== "photo estimate" ? S.foods[id] : { id, name: it.name, brand: it.brand || "", barcode: "", per100: it.per100, servingG: it.servingG || it.grams, source: src };
           return { food, grams: it.grams, meal: sh.meal };
         });
-        dlg.close(); logMany(list); flash(`Logged ${list.length} item${list.length === 1 ? "" : "s"} from your photo.`, "good");
+        dlg.close(); logMany(list); flash(`Logged ${list.length} item${list.length === 1 ? "" : "s"}${sh.plateTitle ? ". They're saved for next time" : " from your photo"}.`, "good");
       };
     } else if (sh.step === "camera") {
       el.innerHTML = head("Scan barcode") + `<video id="cam" playsinline muted style="width:100%;border-radius:10px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
@@ -1764,25 +1780,38 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
     return new Anthropic({ apiKey: apiKey(), dangerouslyAllowBrowser: true });
   }
   const blobToB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(blob); });
-  async function apiAsk(prompt, images = []) {
+  async function apiAsk(prompt, images = [], { web = false } = {}) {
     const client = await apiClient();
     const content = [];
     for (const b of images) content.push({ type: "image", source: { type: "base64", media_type: b.type || "image/jpeg", data: await blobToB64(b) } });
     content.push({ type: "text", text: prompt });
-    const r = await client.beta.messages.create({
-      model: "claude-opus-5-5", max_tokens: 4000,
-      betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
-      output_config: { effort: "low" },
-      messages: [{ role: "user", content }],
-    });
+    const messages = [{ role: "user", content }];
+    let r;
+    // Web searches run on Anthropic's side; a long one can pause and needs resending to finish.
+    for (let turn = 0; turn < 4; turn++) {
+      r = await client.beta.messages.create({
+        model: "claude-opus-5-5", max_tokens: web ? 8000 : 4000,
+        betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
+        output_config: { effort: "low" },
+        ...(web ? { tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 4, user_location: { type: "approximate", country: "GB" } }] } : {}),
+        messages,
+      });
+      if (r.stop_reason !== "pause_turn") break;
+      messages.push({ role: "assistant", content: r.content });
+    }
     if (r.stop_reason === "refusal") throw { code: "refusal" };
     return r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
   }
-  async function claudeJSON(prompt, images) {
+  async function claudeJSON(prompt, images, opts = {}) {
     if (sample) return sample.json(prompt, images ? { images, modelTier: "default" } : { modelTier: "default" });
-    const text = await apiAsk(prompt + "\n\nReply with the JSON only, no other text.", images || []);
-    const m = text.match(/[\[{][\s\S]*[\]}]/);
-    return JSON.parse(m ? m[0] : text);
+    const text = await apiAsk(prompt + "\n\nEnd your reply with the JSON only, no other text after it.", images || [], opts);
+    // With web search there can be notes before the JSON: find the first span that parses.
+    const end = Math.max(text.lastIndexOf("}"), text.lastIndexOf("]"));
+    for (let i = 0; i < end; i++) {
+      if (text[i] !== "{" && text[i] !== "[") continue;
+      try { return JSON.parse(text.slice(i, end + 1)); } catch (e) {}
+    }
+    return JSON.parse(text);
   }
   async function claudeText(prompt, onText) {
     if (sample) return (await sample(prompt, { onText })).text;
@@ -1799,9 +1828,52 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
     return "Couldn't reach Claude. Check your connection and try again.";
   }
 
+  // ---------- Restaurants and packaged products, looked up online ----------
+  const CHAINS = ["McDonald's", "KFC", "Popeyes", "Nando's", "Greggs", "Subway", "Burger King", "Five Guys", "Wingstop", "Domino's", "Pizza Hut", "Pret", "Wagamama", "Leon", "itsu", "Starbucks", "Costa", "German Doner Kebab", "Taco Bell", "Chipotle", "Wendy's", "Tortilla", "Wasabi", "Shake Shack"];
+  async function lookupMenu(q, wholeMenu) {
+    if (!q) return;
+    const web = !sample; // the installed app can search the web; inside Claude it uses what Claude knows
+    sh.step = "busy"; sh.status = web ? `Looking up ${q} online…` : `Looking up ${q}…`; drawSheet();
+    try {
+      const out = await claudeJSON(
+        `Someone in the UK wants to log "${q}" in a calorie tracker. It's most likely a restaurant, takeaway or fast-food order. ` +
+        (web ? `Search the web for the chain's official UK nutrition information (its website or nutrition PDF) and use those figures. ` : `Use the chain's published UK nutrition figures where you know them; otherwise estimate from typical recipes. `) +
+        (wholeMenu ? `List the ${q} items people order most in the UK: mains, sides and drinks, about 16 items. ` : `List the matching menu items, including common sizes or variants and the usual sides, up to 10 items, most likely match first. `) +
+        `Return JSON: {"items": [{"name": item name as on the menu, "brand": chain name or "", "serving": short portion such as "1 burger" or "regular", "grams": serving weight in grams (estimate if not published), "kcal": number, "protein": number, "carbs": number, "fat": number, "fibre": number}], "source": "official" if the figures come from the chain, otherwise "estimate", "note": one short sentence on anything uncertain}. All nutrition values are per serving. If it isn't food at all, return {"items": []}.`,
+        undefined, { web });
+      const num = (x) => (typeof x === "number" && isFinite(x) && x >= 0 ? x : 0);
+      sh.plate = (out.items || []).filter((it) => it && it.name && num(it.kcal) > 0).map((it) => {
+        const g = Math.round(num(it.grams)) || 100;
+        return { name: String(it.name).slice(0, 60), brand: String(it.brand || "").slice(0, 40), serving: String(it.serving || "").slice(0, 40), grams: g, servingG: g, on: false, source: "restaurant",
+          per100: { kcal: Math.round((num(it.kcal) / g) * 100), p: Math.round((num(it.protein) / g) * 1000) / 10, c: Math.round((num(it.carbs) / g) * 1000) / 10, f: Math.round((num(it.fat) / g) * 1000) / 10, fibre: Math.round((num(it.fibre) / g) * 1000) / 10 } };
+      });
+      if (!sh.plate.length) { sh.step = "choose"; sh.status = `Couldn't find nutrition for "${q}". Try the restaurant's name and the item, like "Popeyes chicken sandwich".`; sh.statusKind = "warn"; drawSheet(); return; }
+      if (sh.plate.length === 1) sh.plate[0].on = true;
+      sh.plateTitle = wholeMenu ? q : "Restaurant food";
+      sh.plateIntro = "Tick what you had. Change the grams if you had more or less than one portion.";
+      sh.plateNote = out.source === "official" ? "Figures from the restaurant's published nutrition." : "These are estimates, as the restaurant's figures weren't found.";
+      sh.step = "plate"; sh.status = null;
+    } catch (e) { sh.step = "choose"; sh.status = aiError(e); sh.statusKind = "warn"; }
+    drawSheet();
+  }
+  async function searchProducts(q) {
+    if (!q) return;
+    sh.step = "busy"; sh.status = `Searching packaged foods for "${q}"…`; drawSheet();
+    try {
+      const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 12000);
+      const r = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=24&tagtype_0=countries&tag_contains_0=contains&tag_0=united-kingdom&fields=code,product_name,brands,nutriments,serving_quantity`, { signal: ctl.signal });
+      clearTimeout(to);
+      const j = await r.json();
+      sh.products = (j.products || []).map((p) => p.code && p.product_name ? N.fromOpenFoodFacts(p.code, p) : null).filter(Boolean);
+      if (!sh.products.length) { sh.step = "choose"; sh.status = `No packaged products found for "${q}". Try fewer words or the brand name.`; sh.statusKind = "warn"; drawSheet(); return; }
+      sh.step = "products"; sh.status = null;
+    } catch (e) { sh.step = "choose"; sh.status = "Couldn't reach Open Food Facts. Check your connection and try again."; sh.statusKind = "warn"; }
+    drawSheet();
+  }
+
   // ---------- Photo of a meal ----------
   async function readMeal(file) {
-    sh.step = "busy"; sh.status = "Claude is looking at your meal…"; drawSheet();
+    sh.step = "busy"; sh.status = "Claude is looking at your meal…"; sh.plateTitle = sh.plateIntro = null; drawSheet();
     try {
       const canvas = await shrink(file, 1400);
       const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
