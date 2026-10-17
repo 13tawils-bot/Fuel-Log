@@ -1527,13 +1527,15 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
           ${!meals.length && !list.length && !common.length ? `<p class="empty">${q ? `Nothing saved matches "${esc(sh.q)}" yet. Look it up online below.` : "Type what you ate, like chicken, eggs or rice. Foods you log show up here next time for one-tap logging."}</p>` : ""}
           ${q.length >= 2 ? `<div class="tag">Look it up online</div>
             <button type="button" class="result" ${aiText() ? 'data-online="menu"' : "data-needkey"}><span>Restaurant or takeaway<br><span class="small muted">"${esc(sh.q.trim())}" · menu items with calories</span></span><span class="small muted">›</span></button>
-            <button type="button" class="result" data-online="off"><span>Packaged product<br><span class="small muted">Search Open Food Facts</span></span><span class="small muted">›</span></button>` : ""}
+            <button type="button" class="result" data-online="off"><span>Packaged product<br><span class="small muted">Search Open Food Facts</span></span><span class="small muted">›</span></button>
+            <button type="button" class="result" data-pastenut><span>Paste nutrition info<br><span class="small muted">Copied from a website, menu or app</span></span><span class="small muted">›</span></button>` : ""}
           ${!q ? `<div class="tag">Eating out</div><div class="chips chains">${CHAINS.map((c) => `<button type="button" ${aiText() ? `data-chain="${esc(c)}"` : "data-needkey"}>${esc(c)}</button>`).join("")}</div>` : ""}
-          ${liveScanOk && !q ? `<div class="row" style="padding-top:8px;gap:14px"><label class="link small" style="position:relative">Barcode photo<input type="file" id="bc-file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0"></label><button class="link small" type="button" id="typebc">Type a barcode</button></div>` : !q ? `<button class="link small" type="button" id="typebc" style="justify-self:start;padding-top:8px">Type a barcode</button>` : ""}
+          ${liveScanOk && !q ? `<div class="row" style="padding-top:8px;gap:14px"><label class="link small" style="position:relative">Barcode photo<input type="file" id="bc-file" accept="image/*" capture="environment" style="position:absolute;inset:0;opacity:0"></label><button class="link small" type="button" id="typebc">Type a barcode</button><button class="link small" type="button" data-pastenut>Paste nutrition info</button></div>` : !q ? `<div class="row" style="padding-top:8px;gap:14px"><button class="link small" type="button" id="typebc">Type a barcode</button><button class="link small" type="button" data-pastenut>Paste nutrition info</button></div>` : ""}
         </div>`;
       const bf = $("#bc-file"); if (bf) bf.onchange = (e) => e.target.files[0] && handleBarcodePhoto(e.target.files[0]);
       const lv = $("#live"); if (lv) lv.onclick = () => { sh.step = "camera"; drawSheet(); };
       el.querySelectorAll("[data-online]").forEach((b) => (b.onclick = () => (b.dataset.online === "menu" ? lookupMenu(sh.q.trim()) : searchProducts(sh.q.trim()))));
+      el.querySelectorAll("[data-pastenut]").forEach((b) => (b.onclick = () => { sh.step = "pastenut"; sh.status = null; drawSheet(); }));
       el.querySelectorAll("[data-chain]").forEach((b) => (b.onclick = () => lookupMenu(b.dataset.chain, true)));
       el.querySelectorAll("[data-needkey]").forEach((b) => (b.onclick = () => { sh.step = "needkey"; sh.status = null; drawSheet(); }));
       const mf = $("#meal-file"); if (mf) mf.onchange = (e) => e.target.files[0] && readMeal(e.target.files[0]);
@@ -1553,6 +1555,16 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
       $("#tbc").onsubmit = (e) => { e.preventDefault(); const v = $("#tbc-v").value.replace(/\D/g, ""); if (v.length >= 8) lookupBarcode(v); };
       $("#back").onclick = () => { sh.step = "choose"; drawSheet(); };
       $("#tbc-v").focus();
+    } else if (sh.step === "pastenut") {
+      el.innerHTML = head("Paste nutrition info") + `
+        <p class="small muted" style="margin:0">Copy the nutrition from the restaurant's website, a menu PDF or another app, and paste it here. Any layout works: a table, a list or a sentence like "690 calories, 28g protein".</p>
+        <input type="text" id="pn-name" placeholder="What is it? e.g. Popeyes chicken sandwich" value="${esc(sh.pasteName || sh.q || "")}" aria-label="Food name">
+        <textarea id="pn-text" rows="7" placeholder="Paste here">${esc(sh.pasteText || "")}</textarea>
+        ${sh.status ? `<div class="status ${sh.statusKind || ""}" role="status">${esc(sh.status)}</div>` : ""}
+        <button class="btn wide" type="button" id="pn-go">Read it</button>
+        <button class="link" type="button" id="back">Back</button>`;
+      $("#back").onclick = () => { sh.step = "choose"; sh.status = null; drawSheet(); };
+      $("#pn-go").onclick = () => { sh.pasteName = $("#pn-name").value.trim(); sh.pasteText = $("#pn-text").value; readPasted(); };
     } else if (sh.step === "products") {
       el.innerHTML = head("Packaged products") + `
         <div class="results" style="max-height:60vh">${sh.products.map((f, k) => `<button type="button" class="result" data-prod="${k}"><span>${esc(f.name)}${f.brand ? ` <span class="muted small">${esc(f.brand)}</span>` : ""}</span><span class="small muted num">${f.per100.kcal}/100g</span></button>`).join("")}</div>
@@ -1855,6 +1867,34 @@ date: [Current Date]</pre>The date line is optional. With it, Fuel Log picks the
       sh.step = "plate"; sh.status = null;
     } catch (e) { sh.step = "choose"; sh.status = aiError(e); sh.statusKind = "warn"; }
     drawSheet();
+  }
+  // Pasted nutrition: Claude untangles messy text and whole menus; without Claude, read it here.
+  async function readPasted() {
+    const text = (sh.pasteText || "").trim(), name = sh.pasteName || "";
+    if (!text) { sh.status = "Paste the nutrition text first."; sh.statusKind = "warn"; drawSheet(); return; }
+    if (aiText()) {
+      sh.step = "busy"; sh.status = "Reading the nutrition…"; drawSheet();
+      try {
+        const out = await claudeJSON(`Someone pasted this nutrition information into a UK calorie tracker${name ? `, for "${name}"` : ""}. Pull out each food or drink it describes (one item, or several if it's a menu or table). Use the figures in the text; don't invent any. Use kcal, not kJ. If the text gives both per 100g and per serving, use the per serving values and the serving weight. If no weight is given, estimate it. Return JSON: {"items": [{"name": item name (use "${name || "the item"}" if the text doesn't name it), "brand": restaurant or brand if mentioned, else "", "serving": short portion such as "1 burger", "grams": serving weight in grams, "kcal": number, "protein": number, "carbs": number, "fat": number, "fibre": number}]}. Values are per serving. If there's no nutrition in the text, return {"items": []}.\n\nText:\n"""\n${text.slice(0, 12000)}\n"""`);
+        const num = (x) => (typeof x === "number" && isFinite(x) && x >= 0 ? x : 0);
+        sh.plate = (out.items || []).filter((it) => it && it.name && num(it.kcal) > 0).map((it) => {
+          const g = Math.round(num(it.grams)) || 100;
+          return { name: String(it.name).slice(0, 60), brand: String(it.brand || "").slice(0, 40), serving: String(it.serving || "").slice(0, 40), grams: g, servingG: g, on: true, source: "restaurant",
+            per100: { kcal: Math.round((num(it.kcal) / g) * 100), p: Math.round((num(it.protein) / g) * 1000) / 10, c: Math.round((num(it.carbs) / g) * 1000) / 10, f: Math.round((num(it.fat) / g) * 1000) / 10, fibre: Math.round((num(it.fibre) / g) * 1000) / 10 } };
+        });
+        if (sh.plate.length) {
+          if (sh.plate.length > 1) sh.plate.forEach((x) => (x.on = false));
+          sh.plateTitle = "From your paste"; sh.plateIntro = sh.plate.length > 1 ? "Tick what you had." : "Check it looks right."; sh.plateNote = "Grams are one portion; change them if you had more or less.";
+          sh.step = "plate"; sh.status = null; drawSheet(); return;
+        }
+      } catch (e) { /* fall through to reading it here */ }
+    }
+    const r = N.parseNutritionText(text);
+    if (!r || !r.per100.kcal) { sh.step = "pastenut"; sh.status = "Couldn't find calories in that text. Check it includes the calories (kcal) line."; sh.statusKind = "warn"; drawSheet(); return; }
+    sh.food = { ...blankFood(), name: name || r.name || "", brand: "", per100: r.per100, servingG: r.servingG || "", source: "pasted" };
+    sh.status = r.weightKnown ? `Filled in from your paste${r.basis === "serving" ? `, converted to per 100g from a ${r.servingG}g serving` : ""}. Check the numbers, then save.`
+      : "Filled in from your paste. No weight was given, so 100g here means one portion: log 100g for one, 200g for two. Check the numbers, then save.";
+    sh.statusKind = ""; sh.step = "form"; drawSheet();
   }
   async function searchProducts(q) {
     if (!q) return;

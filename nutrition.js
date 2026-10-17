@@ -480,6 +480,52 @@
     return { verdict, kind, detail, weightChange, waistChange, strengthPct: sPct, lifts: strength ? strength.lifts : 0 };
   }
 
+  // Read nutrition from text copied off a website, menu or label, in whatever
+  // shape it comes: "Protein 28g", "28g protein", or a per 100g / per serving
+  // table. Returns per-100g values plus the serving weight when one is given.
+  function parseNutritionText(text) {
+    if (!text || !text.trim()) return null;
+    const t = text.replace(/\u00a0/g, " ").replace(/(\d),(\d)/g, "$1.$2");
+    const lines = t.split(/\n|;|,\s+/).map((l) => l.trim()).filter(Boolean);
+    const lower = t.toLowerCase();
+    const i100 = lower.search(/(per|\/)\s*100\s*(g|ml)/), iServ = lower.search(/per\s*(serving|portion|item|burger|sandwich|pack|pot|bar|slice|meal|wrap|box)/);
+    const servFirst = iServ >= 0 && (i100 < 0 || iServ < i100);
+    // The value for a nutrient on its line: "28g protein", "Protein 28g", or a row of columns.
+    function grab(label, skip) {
+      for (const l of lines) {
+        const m = l.match(label);
+        if (!m || (skip && skip.test(l))) continue;
+        const before = l.match(new RegExp("(\\d+(?:\\.\\d+)?)\\s*(?:g|mg|kcal)?\\s*(?:of\\s+)?" + label.source, "i"));
+        if (before) return [Number(before[1])];
+        const after = l.slice(m.index + m[0].length).replace(/\((?![^)]*\d+\s*(?:g|kcal))[^)]*\)/g, " ");
+        const first = after.match(/^[^\d]{0,25}?(\d+(?:\.\d+)?)/);
+        if (!first) continue;
+        if (!/\||\t| {2,}/.test(l)) return [Number(first[1])];
+        return [...after.matchAll(/(\d+(?:\.\d+)?)\s*(%)?/g)].filter((x) => !x[2]).map((x) => Number(x[1]));
+      }
+      return null;
+    }
+    let kcal = [...t.matchAll(/(\d+(?:\.\d+)?)\s*kcal/gi)].map((x) => Number(x[1]));
+    if (!kcal.length) kcal = grab(/\b(calories|energy)\b/i) || [];
+    if (!kcal.length) kcal = [...t.matchAll(/(\d+(?:\.\d+)?)\s*(?:calories|cals?)\b/gi)].map((x) => Number(x[1]));
+    if (!kcal.length) kcal = [...t.matchAll(/(\d+(?:\.\d+)?)\s*kj/gi)].map((x) => Number(x[1]) / 4.184);
+    const p = grab(/\bprotein\b/i), c = grab(/\b(total\s+)?carb(ohydrate)?s?\b/i, /of which|sugar/i), f = grab(/\b(total\s+)?fat\b/i, /saturat|trans|of which/i), fib = grab(/\bfib(re|er)\b/i);
+    if (!kcal.length && !p && !c && !f) return null;
+    const serving = lower.match(/(?:serving|portion)(?:\s*size)?\s*[:=(]?\s*(\d+(?:\.\d+)?)\s*(?:g|ml)\b/) || lower.match(/per\s+(?!100\s*(?:g|ml))[a-z ]{0,20}?\(?\s*(\d+(?:\.\d+)?)\s*(?:g|ml)\b/) || lower.match(/\b(\d+(?:\.\d+)?)\s*(?:g|ml)\s+(?:serving|portion)/);
+    const servingG = serving ? Number(serving[1]) : null;
+    // Two columns means per 100g and per serving; pick the per-100g one.
+    const twoCols = [kcal, p, c, f].some((v) => v && v.length >= 2) && i100 >= 0;
+    const col = twoCols ? (servFirst ? 1 : 0) : 0;
+    const pick = (v) => (v && v.length ? (v[Math.min(col, v.length - 1)]) : 0);
+    const vals = { kcal: pick(kcal), p: pick(p), c: pick(c), f: pick(f), fibre: pick(fib) };
+    const basis = twoCols || (i100 >= 0 && iServ < 0) ? "100g" : "serving";
+    const scale = basis === "100g" ? 1 : 100 / (servingG || 100);
+    const r = (x) => Math.round(x * scale * 10) / 10;
+    const head = t.split("\n")[0].split(/[:|]/)[0].trim();
+    const firstLine = head && !/\d/.test(head) && head.length <= 60 && !/typical|nutrition|values|per serving|per 100/i.test(head) ? head : "";
+    return { name: firstLine, per100: { kcal: Math.round(vals.kcal * scale), p: r(vals.p), c: r(vals.c), f: r(vals.f), fibre: r(vals.fibre) }, servingG: basis === "serving" ? servingG || 100 : servingG, basis, weightKnown: basis === "100g" || !!servingG };
+  }
+
   // Map an Open Food Facts product to a library food.
   function fromOpenFoodFacts(code, product) {
     const n = product.nutriments || {};
@@ -493,5 +539,5 @@
     };
   }
 
-  return { GOALS, ACTIVITY, MEALS, KCAL_PER_KG, iso, addDays, daysBetween, mealForHour, portion, totals, trend, weeklyChange, latestWeight, measuredMaintenance, estimatedMaintenance, targets, habits, suggest, insights, healthInsights, parseHealth, planRest, checkIn, checkInDue, dayWins, weekStreak, mondayOf, navyBodyFat, recomp, fromOpenFoodFacts };
+  return { GOALS, ACTIVITY, MEALS, KCAL_PER_KG, iso, addDays, daysBetween, mealForHour, portion, totals, trend, weeklyChange, latestWeight, measuredMaintenance, estimatedMaintenance, targets, habits, suggest, insights, healthInsights, parseHealth, planRest, checkIn, checkInDue, dayWins, weekStreak, mondayOf, navyBodyFat, recomp, parseNutritionText, fromOpenFoodFacts };
 });

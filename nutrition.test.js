@@ -240,3 +240,15 @@ test("health text dates: Shortcuts formats, and no date means you choose", () =>
   assert.equal(p("16/10/2026, 08:12"), "2026-10-16");
   assert.equal(N.parseHealth("Fuel Log\nsteps: 9000", null).date, null);
 });
+
+test("pasted nutrition text: labels, sentences and per 100g / per serving tables", () => {
+  const a = N.parseNutritionText("Chicken Sandwich\nEnergy 2887kJ / 690kcal\nFat 42g\nof which saturates 7g\nCarbohydrate 50g\nof which sugars 6g\nFibre 2g\nProtein 28g");
+  assert.deepEqual([a.name, a.per100, a.basis, a.weightKnown], ["Chicken Sandwich", { kcal: 690, p: 28, c: 50, f: 42, fibre: 2 }, "serving", false]);
+  const b = N.parseNutritionText("Popeyes Chicken Sandwich: 690 calories, 42g fat, 50g carbs, 28g protein. Serving size 215g.");
+  assert.equal(b.servingG, 215); assert.equal(b.per100.kcal, 321); assert.equal(b.per100.p, 13);
+  const c = N.parseNutritionText("Typical values | Per 100g | Per serving (215g)\nEnergy | 1343kJ 321kcal | 2887kJ 690kcal\nFat | 19.5g | 42g\nSaturates | 3.3g | 7g\nCarbohydrate | 23.3g | 50g\nProtein | 13g | 28g");
+  assert.deepEqual([c.basis, c.servingG, c.per100.kcal, c.per100.f, c.per100.p, c.name], ["100g", 215, 321, 19.5, 13, ""]);
+  const d = N.parseNutritionText("Nutrition per serving: Calories 330, Total Fat 17g, Saturated Fat 3g, Total Carbohydrates 40g, Dietary Fiber 4g, Protein 4g");
+  assert.deepEqual(d.per100, { kcal: 330, p: 4, c: 40, f: 17, fibre: 4 });
+  assert.equal(N.parseNutritionText("hello there"), null);
+});
